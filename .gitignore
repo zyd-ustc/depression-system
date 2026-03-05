@@ -1,0 +1,46 @@
+# OS/editor
+.DS_Store
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Environment/config secrets
+.env
+.env.*
+*.pem
+*.key
+
+# Logs/temp
+*.log
+*.tmp
+tmp/
+
+# Runtime/generated artifacts
+rabbitmq/data/
+data/generate/DataSyn/
+data/generate/DataSynCards/
+data/generate/DataSynBias/
+data/generate/processed/
+training/score_distill/artifacts/
+data/processed/
+data/profiles.jsonl
+media/
+eval/benchmark_v2/outputs/
+eval/benchmark_v2/outputs_test/
+eval/benchmark_v2/data/
+
+# Sensitive/raw datasets (do not track by default)
+data/raw/

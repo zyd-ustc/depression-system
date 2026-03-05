@@ -1,0 +1,17 @@
+[
+  {
+    "id": "case_001",
+    "dialogue": "最近两周我总是睡不好，白天也提不起精神，什么都不想做。",
+    "human_score": 62.0,
+    "symptom_labels": ["insomnia", "anhedonia", "fatigue"],
+    "risk_label": "medium"
+  },
+  {
+    "id": "case_002",
+    "dialogue": "这段时间心情还行，偶尔焦虑但能正常工作和社交。",
+    "human_score": 24.0,
+    "symptom_labels": ["mild_anxiety"],
+    "risk_label": "low"
+  }
+]
+

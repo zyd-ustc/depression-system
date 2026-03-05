@@ -1,0 +1,23 @@
+# UI 依赖
+gradio>=6.0.0
+torch>=2.0.0
+transformers>=4.40.0
+accelerate>=0.30.0
+
+# RAG 依赖
+sentence_transformers
+numpy
+loguru
+langchain==0.1.13
+langchain_community==0.0.29
+langchain_core==0.1.33
+langchain_openai==0.0.8
+langchain_text_splitters==0.0.1
+FlagEmbedding==1.2.8
+unstructured==0.12.6
+PyJWT
+faiss-gpu  # 使用 faiss-cpu 如果没有GPU
+
+# 基础依赖
+pydantic-settings
+structlog

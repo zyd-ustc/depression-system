@@ -1,0 +1,9 @@
+[
+  {
+    "id": "cf_001",
+    "light_id": "case_002",
+    "heavy_id": "case_001",
+    "expected_order": "heavy_gt_light"
+  }
+]
+

@@ -1,0 +1,30 @@
+{
+  "mode": "openai-compatible",
+  "models": [
+    {
+      "name": "gpt-4.1",
+      "api_key_env": "OPENAI_API_KEY",
+      "base_url": "https://api.openai.com/v1",
+      "model_name": "gpt-4.1"
+    },
+    {
+      "name": "claude-3.7-sonnet",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model_name": "anthropic/claude-3.7-sonnet"
+    },
+    {
+      "name": "gemini-2.0-flash",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model_name": "google/gemini-2.0-flash-001"
+    }
+  ],
+  "judge": {
+    "enabled": true,
+    "api_key_env": "JUDGE_API_KEY",
+    "base_url": "https://api.openai.com/v1",
+    "model_name": "gpt-4o-mini"
+  }
+}
+
