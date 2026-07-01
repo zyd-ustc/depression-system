@@ -32,6 +32,8 @@ class ConsentResponse(BaseModel):
 
 class RiskAssessment(BaseModel):
     level: RiskLevel
+    score: int
+    covered_topics: list[str] = Field(default_factory=list)
     matched_keywords: list[str] = Field(default_factory=list)
     route: Literal["support", "suggest_professional_help", "urgent_support"]
     rationale: str

@@ -164,9 +164,10 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         raise HTTPException(status_code=403, detail="consent_required")
 
     message = payload.message.strip()
-    risk = assess_risk(message)
     conversation_id = _get_or_create_conversation(int(user["id"]))
     history = _recent_history(conversation_id)
+    risk_text = "\n".join([item["content"] for item in history if item.get("role") == "user"] + [message])
+    risk = assess_risk(risk_text)
     model_output, _json_valid = model_client.generate_json(message, risk, history)
 
     with get_conn() as conn:

@@ -137,6 +137,10 @@ async function sendMessage(event) {
     });
     addMessage("系统", payload.assistant_reply);
     $("riskLevel").textContent = payload.risk.level;
+    $("riskScore").textContent = String(payload.risk.score);
+    $("coveredTopics").textContent = payload.risk.covered_topics.length
+      ? payload.risk.covered_topics.join(" / ")
+      : "-";
   } catch (error) {
     addMessage("系统", `请求失败：${error.message}`);
   } finally {

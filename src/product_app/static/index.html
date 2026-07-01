@@ -11,7 +11,7 @@
       <section class="topbar">
         <div>
           <h1>心理对话协助</h1>
-          <p>支持对话 · 风险判断 · 隐私同意</p>
+          <p>支持对话 · 风险判断 · 话题覆盖</p>
         </div>
         <button id="logoutBtn" class="ghost hidden" type="button">退出</button>
       </section>
@@ -19,7 +19,7 @@
       <section id="authView" class="panel">
         <div class="panel-head">
           <h2>登录</h2>
-          <p>首次使用可直接注册。政策文本暂留空，需同意后进入对话。</p>
+          <p>首次使用可直接注册。</p>
         </div>
         <label>用户名 <input id="username" autocomplete="username" minlength="2" placeholder="至少 2 个字符" /></label>
         <label>密码 <input id="password" type="password" autocomplete="current-password" minlength="6" placeholder="至少 6 位" /></label>
@@ -32,15 +32,12 @@
 
       <section id="consentView" class="panel hidden">
         <div class="panel-head">
-          <h2>隐私同意</h2>
-          <p>隐私政策与用户协议正文暂留白。P0 仅记录同意版本和时间。</p>
-        </div>
-        <div class="policy-box">
-          <p>【占位】这里放置隐私政策、数据用途、保存期限、撤回同意、删除数据、风险提示等正式文本。</p>
+          <h2>使用确认</h2>
+          <p>继续前请完成必要确认。</p>
         </div>
         <label class="checkline">
           <input id="consentCheck" type="checkbox" />
-          我已阅读并同意当前占位版本
+          我已确认并继续使用
         </label>
         <button id="consentBtn" type="button">继续</button>
         <p id="consentStatus" class="status"></p>
@@ -54,6 +51,10 @@
             <dd id="currentUser">-</dd>
             <dt>风险</dt>
             <dd id="riskLevel">-</dd>
+            <dt>分数</dt>
+            <dd id="riskScore">-</dd>
+            <dt>话题</dt>
+            <dd id="coveredTopics">-</dd>
           </dl>
         </aside>
 
