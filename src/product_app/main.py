@@ -18,7 +18,7 @@ from product_app.schemas import (
     ConsentResponse,
     LoginRequest,
 )
-from product_app.security import hash_password, new_token, verify_password
+from product_app.security import hash_password, make_auth_token, read_auth_token, verify_password
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -36,16 +36,7 @@ def _current_user(authorization: str = Header(default="")) -> dict:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing_token")
     token = authorization.removeprefix("Bearer ").strip()
-    with get_conn() as conn:
-        row = conn.execute(
-            """
-            SELECT users.* FROM sessions
-            JOIN users ON users.id = sessions.user_id
-            WHERE sessions.token = ?
-            """,
-            (token,),
-        ).fetchone()
-    user = row_to_dict(row)
+    user = read_auth_token(token, settings.APP_SECRET)
     if user is None:
         raise HTTPException(status_code=401, detail="invalid_token")
     return user
@@ -61,6 +52,15 @@ def _auth_response(token: str, user: dict) -> AuthResponse:
         username=user["username"],
         consent_required=_consent_required(user),
         consent_version=settings.CONSENT_VERSION,
+    )
+
+
+def _token_for_user(user: dict) -> str:
+    return make_auth_token(
+        username=user["username"],
+        secret=settings.APP_SECRET,
+        consent_version=user.get("consent_version"),
+        consent_at=user.get("consent_at"),
     )
 
 
@@ -81,11 +81,7 @@ def register(payload: LoginRequest) -> AuthResponse:
                 (username, hash_password(payload.password), utc_now()),
             )
             user = row_to_dict(conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone())
-            token = new_token()
-            conn.execute(
-                "INSERT INTO sessions(user_id, token, created_at) VALUES (?, ?, ?)",
-                (user["id"], token, utc_now()),
-            )
+            token = _token_for_user(user)
         except Exception as exc:  # noqa: BLE001
             if "UNIQUE" in str(exc).upper():
                 raise HTTPException(status_code=409, detail="username_exists") from exc
@@ -101,11 +97,7 @@ def login(payload: LoginRequest) -> AuthResponse:
         )
         if user is None or not verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="invalid_credentials")
-        token = new_token()
-        conn.execute(
-            "INSERT INTO sessions(user_id, token, created_at) VALUES (?, ?, ?)",
-            (user["id"], token, utc_now()),
-        )
+        token = _token_for_user(user)
     return _auth_response(token, user)
 
 
@@ -119,12 +111,22 @@ def me(user: dict = Depends(_current_user), authorization: str = Header(default=
 def accept_consent(payload: ConsentRequest, user: dict = Depends(_current_user)) -> ConsentResponse:
     if not payload.accepted:
         raise HTTPException(status_code=400, detail="consent_required")
+    consent_at = utc_now()
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE users SET consent_version = ?, consent_at = ? WHERE id = ?",
-            (settings.CONSENT_VERSION, utc_now(), user["id"]),
-        )
-    return ConsentResponse(accepted=True, consent_version=settings.CONSENT_VERSION)
+        try:
+            conn.execute(
+                "UPDATE users SET consent_version = ?, consent_at = ? WHERE username = ?",
+                (settings.CONSENT_VERSION, consent_at, user["username"]),
+            )
+        except Exception:
+            pass
+    token = make_auth_token(
+        username=user["username"],
+        secret=settings.APP_SECRET,
+        consent_version=settings.CONSENT_VERSION,
+        consent_at=consent_at,
+    )
+    return ConsentResponse(accepted=True, consent_version=settings.CONSENT_VERSION, token=token)
 
 
 def _get_or_create_conversation(user_id: int) -> int:

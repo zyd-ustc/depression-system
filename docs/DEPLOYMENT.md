@@ -48,6 +48,7 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
 PRODUCT_DB_PATH=/opt/depression-system/data/product_app.sqlite3
 CONSENT_VERSION=p0-placeholder
+APP_SECRET=replace-with-a-random-long-string
 HOST=127.0.0.1
 PORT=8000
 ```
@@ -168,4 +169,3 @@ PYTHONPATH=src python scripts/p0_adversarial_audit.py
 - DeepSeek JSON 校验；
 - Nginx HTTPS 可访问；
 - `data/product_app.sqlite3` 有备份策略。
-

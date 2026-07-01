@@ -92,10 +92,12 @@ async function acceptConsent() {
     return;
   }
   try {
-    await api("/api/consent", {
+    const payload = await api("/api/consent", {
       method: "POST",
       body: JSON.stringify({ accepted: true }),
     });
+    state.token = payload.token;
+    localStorage.setItem("product_token", state.token);
     show("chatView");
   } catch (error) {
     setStatus("consentStatus", `失败：${error.message}`);

@@ -16,6 +16,7 @@ class ProductSettings:
     """Environment-backed settings for the P0 product app."""
 
     APP_NAME = "Depression Support Assistant"
+    APP_SECRET = os.getenv("APP_SECRET", "vercel-demo-change-me")
     CONSENT_VERSION = os.getenv("CONSENT_VERSION", "p0-placeholder")
     DATABASE_URL = os.getenv("PRODUCT_DB_PATH", _default_db_path())
 

@@ -27,6 +27,7 @@ class ConsentRequest(BaseModel):
 class ConsentResponse(BaseModel):
     accepted: bool
     consent_version: str
+    token: str
 
 
 class RiskAssessment(BaseModel):
