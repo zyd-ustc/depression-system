@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>心理对话协助</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="topbar">
+        <div>
+          <h1>心理对话协助</h1>
+          <p>支持对话 · 风险判断 · 隐私同意</p>
+        </div>
+        <button id="logoutBtn" class="ghost hidden" type="button">退出</button>
+      </section>
+
+      <section id="authView" class="panel">
+        <div class="panel-head">
+          <h2>登录</h2>
+          <p>首次使用可直接注册。政策文本暂留空，需同意后进入对话。</p>
+        </div>
+        <label>用户名 <input id="username" autocomplete="username" /></label>
+        <label>密码 <input id="password" type="password" autocomplete="current-password" /></label>
+        <div class="actions">
+          <button id="loginBtn" type="button">登录</button>
+          <button id="registerBtn" class="secondary" type="button">注册</button>
+        </div>
+        <p id="authStatus" class="status"></p>
+      </section>
+
+      <section id="consentView" class="panel hidden">
+        <div class="panel-head">
+          <h2>隐私同意</h2>
+          <p>隐私政策与用户协议正文暂留白。P0 仅记录同意版本和时间。</p>
+        </div>
+        <div class="policy-box">
+          <p>【占位】这里放置隐私政策、数据用途、保存期限、撤回同意、删除数据、风险提示等正式文本。</p>
+        </div>
+        <label class="checkline">
+          <input id="consentCheck" type="checkbox" />
+          我已阅读并同意当前占位版本
+        </label>
+        <button id="consentBtn" type="button">继续</button>
+        <p id="consentStatus" class="status"></p>
+      </section>
+
+      <section id="chatView" class="chat-layout hidden">
+        <aside class="side">
+          <h2>状态</h2>
+          <dl>
+            <dt>用户</dt>
+            <dd id="currentUser">-</dd>
+            <dt>风险</dt>
+            <dd id="riskLevel">-</dd>
+          </dl>
+        </aside>
+
+        <section class="conversation">
+          <div id="messages" class="messages" aria-live="polite"></div>
+          <form id="chatForm" class="composer">
+            <textarea id="messageInput" rows="3" placeholder="写下你现在最想说的一句话"></textarea>
+            <button type="submit">发送</button>
+          </form>
+        </section>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

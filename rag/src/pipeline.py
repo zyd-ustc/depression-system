@@ -28,7 +28,7 @@ class EmoLLMRAG(object):
         for doc in documents:
             content.append(doc.page_content)
         if self.rerank_flag:
-            documents, _ = self.data_processing_obj.rerank(documents, self.select_num)
+            documents, _ = self.data_processing_obj.rerank(query, documents, self.select_num)
 
             content = []
             for doc in documents:

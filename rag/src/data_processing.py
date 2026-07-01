@@ -161,8 +161,27 @@ class Data_process():
         if not os.path.exists(vector_db_dir) or not os.listdir(vector_db_dir):
             db = self.create_vector_db(emb_model)
         else:
-            db = FAISS.load_local(vector_db_dir, emb_model)
+            try:
+                db = FAISS.load_local(
+                    vector_db_dir,
+                    emb_model,
+                    allow_dangerous_deserialization=True,
+                )
+            except TypeError:
+                db = FAISS.load_local(vector_db_dir, emb_model)
         return db
+
+    def rerank(self, query, documents, select_num=3):
+        if not documents:
+            return [], []
+        reranker_model = self.load_rerank_model()
+        pairs = [[query, doc.page_content] for doc in documents]
+        scores = reranker_model.compute_score(pairs)
+        if not isinstance(scores, list):
+            scores = [scores]
+        ranked = sorted(zip(documents, scores), key=lambda item: item[1], reverse=True)
+        selected = ranked[:select_num]
+        return [doc.page_content for doc, _ in selected], [float(score) for _, score in selected]
     
 if __name__ == "__main__":
     logger.info(data_dir)
