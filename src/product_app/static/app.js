@@ -15,13 +15,27 @@ function setStatus(id, text) {
   $(id).textContent = text || "";
 }
 
+function formatApiError(payload, fallback) {
+  const detail = payload.detail;
+  if (Array.isArray(detail)) {
+    return detail.map((item) => item.msg || JSON.stringify(item)).join("；");
+  }
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (detail && typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+  return fallback;
+}
+
 async function api(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
   const response = await fetch(path, { ...options, headers });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(payload.detail || response.statusText);
+    throw new Error(formatApiError(payload, response.statusText));
   }
   return payload;
 }
@@ -30,6 +44,14 @@ async function authenticate(mode) {
   setStatus("authStatus", "");
   const username = $("username").value.trim();
   const password = $("password").value;
+  if (username.length < 2) {
+    setStatus("authStatus", "用户名至少 2 个字符。");
+    return;
+  }
+  if (password.length < 6) {
+    setStatus("authStatus", "密码至少 6 位。");
+    return;
+  }
   try {
     const payload = await api(`/api/auth/${mode}`, {
       method: "POST",

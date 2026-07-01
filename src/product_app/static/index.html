@@ -21,8 +21,8 @@
           <h2>登录</h2>
           <p>首次使用可直接注册。政策文本暂留空，需同意后进入对话。</p>
         </div>
-        <label>用户名 <input id="username" autocomplete="username" /></label>
-        <label>密码 <input id="password" type="password" autocomplete="current-password" /></label>
+        <label>用户名 <input id="username" autocomplete="username" minlength="2" placeholder="至少 2 个字符" /></label>
+        <label>密码 <input id="password" type="password" autocomplete="current-password" minlength="6" placeholder="至少 6 位" /></label>
         <div class="actions">
           <button id="loginBtn" type="button">登录</button>
           <button id="registerBtn" class="secondary" type="button">注册</button>
