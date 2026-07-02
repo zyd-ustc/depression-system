@@ -11,7 +11,7 @@ function formatApiError(payload: any, fallback: string) {
   if (detail && typeof detail === 'object') {
     return JSON.stringify(detail);
   }
-  return fallback;
+  return fallback || '服务未返回错误详情';
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -31,7 +31,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     if (response.status === 401) {
       userStore.logout();
     }
-    throw new Error(formatApiError(payload, response.statusText));
+    throw new Error(formatApiError(payload, response.statusText || `HTTP ${response.status}`));
   }
   return payload as T;
 }

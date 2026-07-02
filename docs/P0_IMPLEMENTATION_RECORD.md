@@ -130,6 +130,7 @@ DeepSeek 使用 OpenAI-compatible API：
 - fallback 不再直接拼接内部 `prompt_instruction`；
 - 用户侧不会看到“不要像问卷”这类内部提示词；
 - 高风险回复不交给模型自由生成。
+- 前端会把 API 错误格式化为明确文本；如果服务端没有返回错误详情，也会显示兜底说明，避免只出现空白系统消息或“提示”。
 
 ## 7. 风险判断
 
@@ -191,3 +192,4 @@ npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
 - 停止逻辑已经具备基本条件，但报告质量依赖模型能力；
 - RAG 尚未接入产品对话；
 - 本地没有 `DEEPSEEK_API_KEY` 时会走 fallback，前端会显示 `fallback`。
+- 如果 DeepSeek token 或远端服务异常，当前仍会进入错误反馈或 fallback 路径；需要在生产环境确认 `DEEPSEEK_API_KEY` 是否正确配置。

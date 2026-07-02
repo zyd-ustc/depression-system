@@ -46,7 +46,8 @@ export const useChatStore = defineStore('chat', () => {
       applyResponse(response);
     }
     catch (error) {
-      const text = error instanceof Error ? error.message : '请求失败';
+      const message = error instanceof Error ? error.message.trim() : '';
+      const text = message ? `请求失败：${message}` : '请求失败：网络或服务未返回错误信息';
       append('system', text);
       throw error;
     }

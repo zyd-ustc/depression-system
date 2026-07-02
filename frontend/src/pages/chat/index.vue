@@ -51,7 +51,10 @@ async function handleSubmit(message: string) {
     await chatStore.send(message);
   }
   catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '发送失败');
+    const text = error instanceof Error && error.message.trim()
+      ? error.message
+      : '发送失败：网络或服务未返回错误信息';
+    ElMessage.error(text);
   }
 }
 </script>
