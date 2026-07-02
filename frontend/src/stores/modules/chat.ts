@@ -24,12 +24,14 @@ export const useChatStore = defineStore('chat', () => {
   const stopDecision = ref<DialogueStopDecision | null>(null);
   const modelBackend = ref<'deepseek' | 'fallback' | null>(null);
   const modelJsonValid = ref<boolean | null>(null);
+  const conversationId = ref<number | null>(null);
 
   function append(role: ChatMessage['role'], content: string) {
     messages.value.push({ role, content });
   }
 
   function applyResponse(response: ChatResponse) {
+    conversationId.value = response.conversation_id;
     append('assistant', response.assistant_reply);
     risk.value = response.risk;
     nextTopic.value = response.next_topic_focus;
@@ -40,6 +42,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function hydrateFromMonitor(response: MonitorResponse) {
+    conversationId.value = response.conversation_id;
     messages.value = response.messages.map(item => ({
       role: item.role,
       content: item.content,
@@ -70,7 +73,7 @@ export const useChatStore = defineStore('chat', () => {
     append('user', message);
     loading.value = true;
     try {
-      const response = await sendChat(message);
+      const response = await sendChat(message, conversationId.value);
       applyResponse(response);
     }
     catch (error) {
@@ -85,6 +88,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function clear() {
+    conversationId.value = null;
     messages.value = [];
     risk.value = null;
     nextTopic.value = null;
@@ -96,6 +100,7 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     messages,
+    conversationId,
     loading,
     risk,
     nextTopic,

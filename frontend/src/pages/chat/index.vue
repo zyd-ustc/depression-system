@@ -35,25 +35,40 @@ onMounted(async () => {
     showLogin.value = true;
     return;
   }
-  let payload;
   try {
-    payload = await me();
+    const payload = await me();
     userStore.setAuth(payload);
   }
   catch {
     showLogin.value = true;
     return;
   }
-  if (!payload.consent_required && chatStore.messages.length === 0) {
-    try {
-      const monitor = await fetchCurrentMonitor();
-      chatStore.hydrateFromMonitor(monitor);
-    }
-    catch {
-      // History hydration is best-effort; sending a new message can still continue the session.
-    }
-  }
 });
+
+async function handleContinueLast() {
+  if (!canChat.value) {
+    showLogin.value = !userStore.isAuthed;
+    return;
+  }
+  try {
+    const monitor = await fetchCurrentMonitor();
+    if (!monitor.conversation_id) {
+      ElMessage.info('暂无可继续的会话');
+      return;
+    }
+    chatStore.hydrateFromMonitor(monitor);
+    ElMessage.success('已载入最近会话');
+  }
+  catch (error) {
+    const text = error instanceof Error ? error.message : '载入失败';
+    ElMessage.error(text);
+  }
+}
+
+function handleNewSession() {
+  chatStore.clear();
+  ElMessage.success('已开始新会话');
+}
 
 async function handleSubmit(message: string) {
   if (!canChat.value) {
@@ -94,6 +109,12 @@ async function handleSubmit(message: string) {
               <Monitor />
             </el-icon>
             后台
+          </el-button>
+          <el-button v-if="userStore.isAuthed" @click="handleContinueLast">
+            继续
+          </el-button>
+          <el-button v-if="userStore.isAuthed" @click="handleNewSession">
+            新会话
           </el-button>
           <el-button v-else @click="showLogin = true">登录</el-button>
         </div>

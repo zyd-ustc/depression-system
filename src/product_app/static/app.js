@@ -1,6 +1,7 @@
 const state = {
   token: localStorage.getItem("product_token") || "",
   username: "",
+  conversationId: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -133,8 +134,9 @@ async function sendMessage(event) {
   try {
     const payload = await api("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, conversation_id: state.conversationId }),
     });
+    state.conversationId = payload.conversation_id;
     addMessage("系统", payload.assistant_reply);
     $("riskLevel").textContent = payload.risk.level;
     $("riskScore").textContent = String(payload.risk.score);
@@ -156,6 +158,7 @@ $("chatForm").addEventListener("submit", sendMessage);
 $("logoutBtn").addEventListener("click", () => {
   localStorage.removeItem("product_token");
   state.token = "";
+  state.conversationId = null;
   show("authView");
 });
 

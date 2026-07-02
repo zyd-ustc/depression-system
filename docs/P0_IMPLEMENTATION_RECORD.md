@@ -42,11 +42,11 @@ SQLite 默认位置：
 核心表：
 
 - `users`：用户名、密码哈希、同意版本和同意时间；
-- `conversations`：会话时间与 `topic_state`；
+- `conversations`：咨询会话时间与 `topic_state`；
 - `messages`：用户和助手消息；
 - `sessions`：旧 session 表保留，当前 token 主要使用签名 token。
 
-聊天页刷新后会从当前会话恢复后端 `messages`，避免只依赖前端内存导致历史消失。
+登录 token 与咨询会话已拆开：`/api/chat` 只有在请求携带 `conversation_id` 时才续接指定咨询会话；不携带时创建新咨询会话。聊天页刷新后默认进入空白新会话，用户点击“继续”才会载入最近一次咨询会话。
 
 `topic_state` 是 JSON 字符串，当前字段包括：
 
@@ -131,6 +131,7 @@ DeepSeek 使用 OpenAI-compatible API：
 - 风险判断和预热摘要使用当前会话完整用户历史；
 - `conversation_history_json` 给模型时仍保留上限保护，默认 `MAX_HISTORY_MESSAGES=80`；
 - 后台监控接口默认返回当前会话完整历史。
+- 刷新页面不会自动把最近会话写回聊天页，避免 Vercel 登录态恢复时误续接上一轮咨询。
 
 前端状态栏会显示：
 

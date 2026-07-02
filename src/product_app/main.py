@@ -149,14 +149,8 @@ def accept_consent(payload: ConsentRequest, user: dict = Depends(_current_user))
     return ConsentResponse(accepted=True, consent_version=settings.CONSENT_VERSION, token=token)
 
 
-def _get_or_create_conversation(user_id: int) -> dict:
+def _create_conversation(user_id: int) -> dict:
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT id, topic_state FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
-            (user_id,),
-        ).fetchone()
-        if row:
-            return row_to_dict(row)
         now = utc_now()
         initial_topic_state = dump_topic_state(default_topic_state())
         cursor = conn.execute(
@@ -164,6 +158,19 @@ def _get_or_create_conversation(user_id: int) -> dict:
             (user_id, now, now, initial_topic_state),
         )
         return {"id": int(cursor.lastrowid), "topic_state": initial_topic_state}
+
+
+def _get_conversation(user_id: int, conversation_id: int | None) -> dict:
+    if conversation_id is None:
+        return _create_conversation(user_id)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, topic_state FROM conversations WHERE id = ? AND user_id = ?",
+            (conversation_id, user_id),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="conversation_not_found")
+    return row_to_dict(row)
 
 
 def _conversation_history(conversation_id: int, limit: int | None = None) -> list[dict[str, str]]:
@@ -211,7 +218,7 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         raise HTTPException(status_code=403, detail="consent_required")
 
     message = payload.message.strip()
-    conversation = _get_or_create_conversation(int(user["id"]))
+    conversation = _get_conversation(int(user["id"]), payload.conversation_id)
     conversation_id = int(conversation["id"])
     previous_topic_state = parse_topic_state(conversation.get("topic_state"))
     history = _conversation_history(conversation_id)
@@ -264,6 +271,7 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         )
 
     return ChatResponse(
+        conversation_id=conversation_id,
         assistant_reply=model_output.assistant_reply,
         risk=risk,
         next_topic_focus=next_topic_focus,

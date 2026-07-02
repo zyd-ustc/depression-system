@@ -77,6 +77,7 @@ export interface DialogueStopDecision {
 }
 
 export interface ChatResponse {
+  conversation_id: number;
   assistant_reply: string;
   risk: RiskAssessment;
   next_topic_focus: NextTopicFocus;

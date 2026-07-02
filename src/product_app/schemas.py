@@ -97,6 +97,7 @@ class DialogueStopDecision(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
+    conversation_id: int | None = None
 
 
 class ChatModelOutput(BaseModel):
@@ -104,6 +105,7 @@ class ChatModelOutput(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    conversation_id: int
     assistant_reply: str
     risk: RiskAssessment
     next_topic_focus: NextTopicFocus

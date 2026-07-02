@@ -60,8 +60,16 @@ P0 已新增极简产品应用：
 
 - `users`：用户名、密码哈希、同意版本、同意时间；
 - `sessions`：登录 token；
-- `conversations`：会话与 `topic_state`；
+- `conversations`：咨询会话与 `topic_state`；
 - `messages`：用户与助手消息、风险等级。
+
+会话边界：
+
+- 登录 token 只代表用户登录态；
+- `conversation_id` 才代表一次咨询会话；
+- `/api/chat` 不携带 `conversation_id` 时创建新咨询会话；
+- `/api/chat` 携带 `conversation_id` 时才续接该咨询会话；
+- 页面刷新后默认不自动续接最近会话，用户需要点击“继续”显式载入最近会话。
 
 P0 暂不做：
 
