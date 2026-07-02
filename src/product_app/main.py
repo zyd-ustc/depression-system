@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from product_app.config import settings
 from product_app.db import get_conn, init_db, row_to_dict, utc_now
 from product_app.deepseek_client import DeepSeekChatClient
-from product_app.risk import assess_risk
+from product_app.risk import assess_risk, choose_next_topic_focus
 from product_app.schemas import (
     AuthResponse,
     ChatRequest,
@@ -62,6 +62,17 @@ def _token_for_user(user: dict) -> str:
         consent_version=user.get("consent_version"),
         consent_at=user.get("consent_at"),
     )
+
+
+def _patient_info(user: dict) -> dict:
+    return {
+        "patient_id": f"user_{user['id']}",
+        "age": None,
+        "gender": None,
+        "occupation_or_role": None,
+        "known_profile": {},
+        "profile_status": "not_collected",
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -168,7 +179,14 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
     history = _recent_history(conversation_id)
     risk_text = "\n".join([item["content"] for item in history if item.get("role") == "user"] + [message])
     risk = assess_risk(risk_text)
-    model_output, _json_valid = model_client.generate_json(message, risk, history)
+    next_topic_focus = choose_next_topic_focus(risk)
+    model_output, _json_valid = model_client.generate_json(
+        user_message=message,
+        risk=risk,
+        history=history,
+        patient_info=_patient_info(user),
+        next_topic_focus=next_topic_focus,
+    )
 
     with get_conn() as conn:
         now = utc_now()
@@ -185,4 +203,5 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
     return ChatResponse(
         assistant_reply=model_output.assistant_reply,
         risk=risk,
+        next_topic_focus=next_topic_focus,
     )

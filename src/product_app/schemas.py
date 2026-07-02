@@ -39,6 +39,12 @@ class RiskAssessment(BaseModel):
     rationale: str
 
 
+class NextTopicFocus(BaseModel):
+    topic: str
+    objective: str
+    prompt_instruction: str
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
@@ -50,3 +56,4 @@ class ChatModelOutput(BaseModel):
 class ChatResponse(BaseModel):
     assistant_reply: str
     risk: RiskAssessment
+    next_topic_focus: NextTopicFocus

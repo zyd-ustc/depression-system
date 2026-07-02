@@ -141,6 +141,7 @@ async function sendMessage(event) {
     $("coveredTopics").textContent = payload.risk.covered_topics.length
       ? payload.risk.covered_topics.join(" / ")
       : "-";
+    $("nextTopic").textContent = payload.next_topic_focus.topic;
   } catch (error) {
     addMessage("系统", `请求失败：${error.message}`);
   } finally {
