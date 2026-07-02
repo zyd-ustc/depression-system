@@ -17,10 +17,13 @@ from product_app.schemas import (
     ConsentRequest,
     ConsentResponse,
     LoginRequest,
+    MonitorCurrentStatus,
+    MonitorResponse,
+    MonitorWarmupState,
 )
 from product_app.security import hash_password, make_auth_token, read_auth_token, verify_password
 from product_app.stop import END_FOCUS, apply_stop_decision, decide_stop
-from product_app.topics import advance_topic_state, default_topic_state, dump_topic_state, parse_topic_state
+from product_app.topics import WARMUP_MAX_TURNS, advance_topic_state, default_topic_state, dump_topic_state, parse_topic_state
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -75,6 +78,10 @@ def _patient_info(user: dict) -> dict:
         "known_profile": {},
         "profile_status": "not_collected",
     }
+
+
+def _patient_id(user: dict) -> str:
+    return f"user_{user['id']}"
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -172,6 +179,28 @@ def _recent_history(conversation_id: int) -> list[dict[str, str]]:
     return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
 
 
+def _conversation_messages(conversation_id: int, limit: int = 120) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT role, content, risk_level, created_at FROM messages
+            WHERE conversation_id = ?
+            ORDER BY id DESC LIMIT ?
+            """,
+            (conversation_id, limit),
+        ).fetchall()
+    return [row_to_dict(row) for row in reversed(rows)]
+
+
+def _latest_conversation(user_id: int) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, updated_at, topic_state FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+    return row_to_dict(row)
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatResponse:
     if _consent_required(user):
@@ -184,13 +213,27 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
     history = _recent_history(conversation_id)
     risk_text = "\n".join([item["content"] for item in history if item.get("role") == "user"] + [message])
     risk = assess_risk(risk_text)
-    topic_state, next_topic_focus = advance_topic_state(previous_topic_state, risk)
-    stop_decision = decide_stop(message, risk, topic_state)
-    topic_state = apply_stop_decision(topic_state, stop_decision)
-    if stop_decision.should_stop:
+    early_stop_decision = decide_stop(message, risk, previous_topic_state)
+    if early_stop_decision.should_stop and early_stop_decision.reason in {"user_requested_end", "already_ended"}:
+        topic_state = apply_stop_decision(previous_topic_state, early_stop_decision)
+        stop_decision = early_stop_decision
         next_topic_focus = END_FOCUS
         topic_state.current_topic = END_FOCUS.topic
+    else:
+        topic_state, next_topic_focus = advance_topic_state(
+            previous_topic_state,
+            risk,
+            source_text=risk_text,
+            patient_id=_patient_id(user),
+        )
+        stop_decision = decide_stop(message, risk, topic_state)
+        topic_state = apply_stop_decision(topic_state, stop_decision)
+        if stop_decision.should_stop:
+            next_topic_focus = END_FOCUS
+            topic_state.current_topic = END_FOCUS.topic
     model_backend = "deepseek" if model_client.is_available and risk.level != "high" else "fallback"
+    if stop_decision.reason == "already_ended":
+        model_backend = "fallback"
     model_output, json_valid = model_client.generate_json(
         user_message=message,
         risk=risk,
@@ -224,4 +267,73 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         stop_decision=stop_decision,
         model_backend=model_backend,
         model_json_valid=json_valid,
+    )
+
+
+@app.get("/api/monitor/current", response_model=MonitorResponse)
+def monitor_current(user: dict = Depends(_current_user)) -> MonitorResponse:
+    if _consent_required(user):
+        raise HTTPException(status_code=403, detail="consent_required")
+
+    conversation = _latest_conversation(int(user["id"]))
+    if conversation is None:
+        topic_state = default_topic_state()
+        risk = assess_risk("")
+        return MonitorResponse(
+            username=user["username"],
+            conversation_id=None,
+            warmup=MonitorWarmupState(
+                stage=topic_state.stage,
+                warmup_turns=topic_state.warmup_turns,
+                max_warmup_turns=WARMUP_MAX_TURNS,
+                completed=topic_state.warmup_completed,
+                topic_list=[],
+            ),
+            patient_preliminary_info=topic_state.warmup_result.patient_preliminary_info,
+            symptom_judgment=topic_state.warmup_result.symptom_judgment,
+            messages=[],
+            current_status=MonitorCurrentStatus(
+                session_status=topic_state.session_status,
+                stop_reason=topic_state.stop_reason,
+                current_topic=topic_state.current_topic,
+                remaining_topics=[],
+                risk=risk,
+                observed_topics=[],
+                updated_at=None,
+            ),
+            topic_state=topic_state,
+        )
+
+    conversation_id = int(conversation["id"])
+    topic_state = parse_topic_state(conversation.get("topic_state"))
+    messages = _conversation_messages(conversation_id)
+    risk_text = "\n".join([item["content"] for item in messages if item.get("role") == "user"])
+    risk = assess_risk(risk_text)
+    covered = set(topic_state.covered_topics)
+    remaining = [topic for topic in topic_state.planned_topics if topic not in covered]
+    warmup_result = topic_state.warmup_result
+
+    return MonitorResponse(
+        username=user["username"],
+        conversation_id=conversation_id,
+        warmup=MonitorWarmupState(
+            stage=topic_state.stage,
+            warmup_turns=topic_state.warmup_turns,
+            max_warmup_turns=WARMUP_MAX_TURNS,
+            completed=topic_state.warmup_completed or warmup_result.completed,
+            topic_list=warmup_result.topic_list or topic_state.planned_topics,
+        ),
+        patient_preliminary_info=warmup_result.patient_preliminary_info,
+        symptom_judgment=warmup_result.symptom_judgment,
+        messages=messages,
+        current_status=MonitorCurrentStatus(
+            session_status=topic_state.session_status,
+            stop_reason=topic_state.stop_reason,
+            current_topic=topic_state.current_topic,
+            remaining_topics=remaining,
+            risk=risk,
+            observed_topics=topic_state.observed_topics,
+            updated_at=conversation.get("updated_at"),
+        ),
+        topic_state=topic_state,
     )

@@ -16,10 +16,15 @@ END_FOCUS = NextTopicFocus(
 USER_END_PATTERNS = [
     "结束对话",
     "结束咨询",
+    "结束吧",
+    "先结束",
     "停止对话",
     "停止咨询",
     "先到这里",
     "今天到这里",
+    "今天就到这里",
+    "就到这里",
+    "到这里吧",
     "到此为止",
     "不用继续",
     "不聊了",
@@ -43,6 +48,15 @@ def decide_stop(
             report_required=False,
             rationale="High-risk content overrides normal ending flow.",
             prompt_instruction="继续执行安全支持，不进入普通结束报告。",
+        )
+
+    if topic_state.session_status == "ended":
+        return DialogueStopDecision(
+            should_stop=True,
+            reason="already_ended",
+            report_required=False,
+            rationale="The conversation has already been closed and must not resume topic exploration in the same session.",
+            prompt_instruction="本轮对话已经结束。只做简短确认，不再追问，不再开启新话题，也不重复输出完整报告。",
         )
 
     if _user_requested_end(user_message):
@@ -88,8 +102,9 @@ def apply_stop_decision(
         topic_state.session_status = "ended"
         topic_state.stop_reason = stop_decision.reason
     else:
-        topic_state.session_status = "active"
-        topic_state.stop_reason = None
+        if topic_state.session_status != "ended":
+            topic_state.session_status = "active"
+            topic_state.stop_reason = None
     return topic_state
 
 
@@ -99,6 +114,8 @@ def _user_requested_end(text: str) -> bool:
         return False
     if "结束生命" in normalized or "结束自己" in normalized:
         return False
+    if normalized in {"再见", "好再见", "那再见", "谢谢再见", "拜拜", "好拜拜", "那拜拜"}:
+        return True
     return any(_normalize(pattern) in normalized for pattern in USER_END_PATTERNS)
 
 

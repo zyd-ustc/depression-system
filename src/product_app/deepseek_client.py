@@ -39,6 +39,8 @@ def _fallback_reply(
         reply = _fallback_stop_reply(risk, topic_state, stop_decision)
     elif risk.level == "high":
         reply = high_risk_reply()
+    elif next_topic_focus is not None and next_topic_focus.topic == "预热总结与话题计划" and topic_state is not None:
+        reply = _fallback_warmup_summary_reply(topic_state)
     elif risk.level == "medium":
         reply = (
             "我听到你现在承受了不少压力。你可以先说说最近最影响你的一个具体场景，"
@@ -92,6 +94,9 @@ def _fallback_stop_reply(
     topic_state: ConversationTopicState | None,
     stop_decision: DialogueStopDecision,
 ) -> str:
+    if stop_decision.reason == "already_ended":
+        return "本轮对话已经结束，我不会再继续追问或开启新话题。你可以先按刚才的小结休息；如果后续要重新开始，需要进入新的会话。"
+
     planned = topic_state.planned_topics if topic_state else []
     covered = topic_state.covered_topics if topic_state else []
     topics = covered or planned
@@ -110,6 +115,29 @@ def _fallback_stop_reply(
         "这些不是诊断结论，只是基于本轮对话做出的工作假设。\n\n"
         "建议接下来先做两件低负担的事：第一，把今天最影响你的一个场景写成三句话；第二，选一个可以在24小时内完成的小行动，"
         f"比如休息、联系一个可信任的人，或减少一个压力源。{risk_text}如果之后愿意继续，我们可以从这个小行动的结果接着往下梳理。"
+    )
+
+
+def _fallback_warmup_summary_reply(topic_state: ConversationTopicState) -> str:
+    result = topic_state.warmup_result
+    info = result.patient_preliminary_info
+    judgment = result.symptom_judgment
+    topic_text = "、".join(result.topic_list or topic_state.planned_topics) or "情绪状态、睡眠、功能影响和支持系统"
+    context_text = "；".join(info.stated_context) if info.stated_context else "已完成预热信息收集"
+    concern_text = "、".join(info.main_concerns) if info.main_concerns else topic_text
+    impact_text = "、".join(info.functional_impacts) if info.functional_impacts else "功能影响仍需继续观察"
+    support_text = "、".join(info.support_context) if info.support_context else "现实支持资源尚未充分明确"
+    symptom_text = "、".join(judgment.observed_symptoms) if judgment.observed_symptoms else "症状线索仍需继续澄清"
+    pattern_text = "、".join(judgment.possible_patterns) if judgment.possible_patterns else "目前以探索主要压力源为主"
+    risk_text = "、".join(judgment.risk_flags) if judgment.risk_flags else "暂未出现明确高危关键词"
+    return (
+        "预热先到这里，我们把本轮后续咨询的工作框架定下来。\n\n"
+        f"拟覆盖话题：{topic_text}。\n\n"
+        f"患者初步信息：{context_text}。当前主要困扰可先概括为：{concern_text}；"
+        f"已看到的影响包括：{impact_text}；支持资源方面：{support_text}。\n\n"
+        f"症状判断：目前观察到的线索包括{symptom_text}。初步工作假设是：{pattern_text}。"
+        f"风险边界：{risk_text}。这些只是预热后的辅助性观察，不是诊断结论。"
+        "下一轮开始，我会从计划里的第一个未覆盖话题继续推进。"
     )
 
 
@@ -154,6 +182,8 @@ class DeepSeekChatClient:
                 "deepseek_api_not_configured",
             ), True
         if risk.level == "high":
+            return _fallback_reply(user_message, risk, next_topic_focus, topic_state, stop_decision), True
+        if stop_decision.reason == "already_ended":
             return _fallback_reply(user_message, risk, next_topic_focus, topic_state, stop_decision), True
 
         messages = self._build_messages(
@@ -205,8 +235,12 @@ class DeepSeekChatClient:
             "stop_decision_json 表示本轮是否应该结束对话，以及结束原因。"
             "每一轮只推进一个核心关注点，不要跳到多个话题；优先遵守 next_topic_focus_json.prompt_instruction。"
             "如果 topic_state_json.stage 是 warmup，提问要自然像咨询开场，不要像量表；"
+            "如果 next_topic_focus_json.topic 是“预热总结与话题计划”，这条规则优先于 planned 阶段规则；说明5轮预热已结束，"
+            "必须输出用户可读的结构化内容：拟覆盖话题列表、患者初步信息、症状判断、风险边界；"
+            "不要继续预热，不要追问新问题。"
             "如果 stage 是 planned，下一问必须围绕 next_topic_focus_json.topic，不要重复已覆盖话题。"
-            "如果 stop_decision_json.should_stop 为 true，不要再追问新问题，不要一句话告别；"
+            "如果 stop_decision_json.reason 是 already_ended，只做简短确认：本轮已经结束，不再追问，不再开启新话题。"
+            "如果 stop_decision_json.should_stop 为 true 且 reason 不是 already_ended，不要再追问新问题，不要一句话告别；"
             "必须给出自然、完整、专业的结束回复，包含：确认收束、已覆盖主题小结、关键困扰/触发因素整理、"
             "一到两个低负担下一步、风险与线下求助边界、之后可以继续补充的说明。"
             "对话风格：中文、口语化、自然、简洁、具体；先回应情绪，再问一个问题或给一个小步骤。"
@@ -239,11 +273,15 @@ class DeepSeekChatClient:
                 "no_diagnosis_or_scale_score_to_user": True,
                 "no_dangerous_details": True,
                 "when_stop_decision_true_output_complete_closure_report": True,
+                "when_already_ended_do_not_resume": True,
+                "when_warmup_summary_focus_output_structured_summary": True,
             },
             "response_contract_json": {
                 "format": {"assistant_reply": "string"},
                 "assistant_reply_length": (
-                    "350-700 Chinese characters if stop_decision_json.should_stop is true; "
+                    "10-80 Chinese characters if stop_decision_json.reason is already_ended; "
+                    "350-700 Chinese characters if stop_decision_json.should_stop is true "
+                    "or next_topic_focus_json.topic is 预热总结与话题计划; "
                     "otherwise 80-220 Chinese characters"
                 ),
                 "json_only": True,

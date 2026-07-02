@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { Monitor } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { me } from '@/api/auth';
 import ChatSender from '@/components/ChatSender.vue';
 import ConsentGate from '@/components/ConsentGate.vue';
@@ -10,12 +12,14 @@ import { useChatStore, useUserStore } from '@/stores';
 
 const userStore = useUserStore();
 const chatStore = useChatStore();
+const router = useRouter();
 const showLogin = ref(false);
 const messageListRef = ref<HTMLElement | null>(null);
 
 const canChat = computed(() => userStore.isAuthed && !userStore.consentRequired);
 const userLabel = computed(() => userStore.username || '未登录');
 const turnCount = computed(() => chatStore.messages.filter(item => item.role !== 'system').length);
+const sessionEnded = computed(() => chatStore.topicState?.session_status === 'ended');
 
 watch(
   () => chatStore.messages.length,
@@ -47,6 +51,10 @@ async function handleSubmit(message: string) {
     }
     return;
   }
+  if (sessionEnded.value) {
+    ElMessage.info('本轮对话已结束');
+    return;
+  }
   try {
     await chatStore.send(message);
   }
@@ -68,7 +76,15 @@ async function handleSubmit(message: string) {
       </div>
       <div class="top-actions">
         <span class="user-chip">{{ userLabel }}</span>
-        <el-button v-if="!userStore.isAuthed" @click="showLogin = true">登录</el-button>
+        <div class="button-stack">
+          <el-button v-if="userStore.isAuthed" @click="router.push('/monitor')">
+            <el-icon>
+              <Monitor />
+            </el-icon>
+            后台
+          </el-button>
+          <el-button v-else @click="showLogin = true">登录</el-button>
+        </div>
       </div>
     </section>
 
@@ -99,7 +115,7 @@ async function handleSubmit(message: string) {
           </article>
         </div>
 
-        <ChatSender :loading="chatStore.loading" @submit="handleSubmit" />
+        <ChatSender :loading="chatStore.loading" :disabled="sessionEnded" @submit="handleSubmit" />
       </section>
     </section>
 

@@ -2,8 +2,9 @@
 import { Promotion } from '@element-plus/icons-vue';
 import { ref } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   loading?: boolean;
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -13,6 +14,9 @@ const emit = defineEmits<{
 const value = ref('');
 
 function submit() {
+  if (props.disabled) {
+    return;
+  }
   const message = value.value.trim();
   if (!message) {
     return;
@@ -30,11 +34,12 @@ function submit() {
       type="textarea"
       :rows="3"
       resize="none"
-      placeholder="写下此刻最真实的一句话"
+      :disabled="disabled"
+      :placeholder="disabled ? '本轮对话已结束' : '写下此刻最真实的一句话'"
       @keydown.meta.enter.prevent="submit"
       @keydown.ctrl.enter.prevent="submit"
     />
-    <el-button type="primary" native-type="submit" :loading="loading">
+    <el-button type="primary" native-type="submit" :loading="loading" :disabled="disabled">
       <el-icon>
         <Promotion />
       </el-icon>
