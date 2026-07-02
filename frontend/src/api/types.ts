@@ -28,8 +28,31 @@ export interface NextTopicFocus {
   prompt_instruction: string;
 }
 
+export interface ConversationTopicState {
+  stage: 'warmup' | 'planned';
+  warmup_turns: number;
+  planned_topics: string[];
+  covered_topics: string[];
+  observed_topics: string[];
+  current_topic: string | null;
+  session_status: 'active' | 'ended';
+  stop_reason: 'continue' | 'user_requested_end' | 'planned_topics_covered' | null;
+}
+
+export interface DialogueStopDecision {
+  should_stop: boolean;
+  reason: 'continue' | 'user_requested_end' | 'planned_topics_covered';
+  report_required: boolean;
+  rationale: string;
+  prompt_instruction: string;
+}
+
 export interface ChatResponse {
   assistant_reply: string;
   risk: RiskAssessment;
   next_topic_focus: NextTopicFocus;
+  topic_state: ConversationTopicState;
+  stop_decision: DialogueStopDecision;
+  model_backend: 'deepseek' | 'fallback';
+  model_json_valid: boolean;
 }

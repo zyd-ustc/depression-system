@@ -8,6 +8,8 @@
 
 - 对话支持；
 - 风险等级：low / medium / high；
+- 本轮咨询话题阶段、已覆盖话题和下一步话题；
+- 模型后端状态：deepseek / fallback；
 - 是否建议寻求专业帮助；
 - 必要时提示联系线下紧急支持。
 
@@ -46,7 +48,8 @@ PYTHONPATH=src python scripts/p0_adversarial_audit.py
 P0 已新增极简产品应用：
 
 - `src/product_app/main.py`：FastAPI 后端；
-- `src/product_app/static/`：黑白极简前端；
+- `frontend/`：Vue 3 + Pinia + Element Plus 前端；
+- `api/index.py`：Vercel Python 函数入口；
 - SQLite 数据库默认写入 `data/product_app.sqlite3`；
 - 注册、登录、token session；
 - 隐私同意版本记录；
@@ -57,7 +60,7 @@ P0 已新增极简产品应用：
 
 - `users`：用户名、密码哈希、同意版本、同意时间；
 - `sessions`：登录 token；
-- `conversations`：会话；
+- `conversations`：会话与 `topic_state`；
 - `messages`：用户与助手消息、风险等级。
 
 P0 暂不做：
@@ -91,6 +94,59 @@ Prompt 要求模型只输出合法 JSON：
 后端会用 Pydantic 校验 JSON。若 DeepSeek 未配置、返回非法 JSON、或调用失败，则进入 fallback 回复。
 
 高风险消息不交给模型自由生成，直接使用本地高风险回复。
+
+前端会显示当前后端来源：
+
+- `deepseek`：走 DeepSeek API；
+- `fallback`：未配置 API key 或本地 fallback；
+- `deepseek / json-failed`：尝试模型调用但 JSON 校验失败。
+
+fallback 回复不得泄漏内部 prompt 或 `prompt_instruction`。
+
+## 4.1 话题持久化
+
+当前实现位于 `src/product_app/topics.py`。
+
+P0 会先进行 2-3 轮预热：
+
+- 最近最困扰的一件具体事；
+- 持续时间与影响；
+- 本次咨询目标。
+
+之后生成 `planned_topics`，并把本轮咨询要覆盖的话题持久化到 `conversations.topic_state`。
+
+重要原则：
+
+- 用户提到某个关键词只进入 `observed_topics`；
+- 只有系统主动围绕该话题推进并收到用户回复后，才进入 `covered_topics`；
+- 下一步话题从未覆盖的 `planned_topics` 中选择；
+- 高风险会覆盖普通话题推进，优先进入安全支持。
+
+## 4.2 对话停止逻辑
+
+当前实现位于 `src/product_app/stop.py`。
+
+停止分两条路：
+
+1. 用户主动结束：
+   - 例如“先到这里”“结束对话”“不用继续”“输出报告”；
+   - 系统接受用户指令，停止继续追问；
+   - 输出完整本轮咨询报告。
+
+2. 系统自行结束：
+   - 必须已经完成预热并进入计划阶段；
+   - `planned_topics` 必须全部进入 `covered_topics`；
+   - 达成后自然收束，而不是突然说再见。
+
+高风险优先级最高。“结束生命”这类表达不会被误判为普通结束对话，而是进入安全支持。
+
+结束回复必须包含：
+
+- 已覆盖主题；
+- 主要困扰与可能触发因素；
+- 风险与线下求助边界；
+- 一到两个低负担下一步；
+- 之后可以继续补充的说明。
 
 ## 5. RAG 数据处理审查
 
@@ -134,7 +190,12 @@ P0 建议先让 RAG 处于后台可测状态，不在用户端默认开启。
 - 用户必须经过隐私同意流程才能对话；
 - 普通输入能得到支持性回复；
 - 明显自伤/自杀关键词会触发 high；
+- 预热阶段能形成并持久保存本轮计划话题；
+- 下一步话题从未覆盖话题中选择；
+- 用户主动结束时能输出完整报告；
+- 计划话题全部覆盖后能自然结束并输出报告；
 - DeepSeek 返回 JSON 能被校验；
 - DeepSeek 不可用时系统仍可 fallback；
+- fallback 不泄漏内部 prompt；
 - RAG rerank 不再因缺方法直接报错；
 - 有部署文档和一键启动脚本。

@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from product_app.config import settings
 from product_app.db import get_conn, init_db, row_to_dict, utc_now
 from product_app.deepseek_client import DeepSeekChatClient
-from product_app.risk import assess_risk, choose_next_topic_focus
+from product_app.risk import assess_risk
 from product_app.schemas import (
     AuthResponse,
     ChatRequest,
@@ -19,6 +19,8 @@ from product_app.schemas import (
     LoginRequest,
 )
 from product_app.security import hash_password, make_auth_token, read_auth_token, verify_password
+from product_app.stop import END_FOCUS, apply_stop_decision, decide_stop
+from product_app.topics import advance_topic_state, default_topic_state, dump_topic_state, parse_topic_state
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -140,20 +142,21 @@ def accept_consent(payload: ConsentRequest, user: dict = Depends(_current_user))
     return ConsentResponse(accepted=True, consent_version=settings.CONSENT_VERSION, token=token)
 
 
-def _get_or_create_conversation(user_id: int) -> int:
+def _get_or_create_conversation(user_id: int) -> dict:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+            "SELECT id, topic_state FROM conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
             (user_id,),
         ).fetchone()
         if row:
-            return int(row["id"])
+            return row_to_dict(row)
         now = utc_now()
+        initial_topic_state = dump_topic_state(default_topic_state())
         cursor = conn.execute(
-            "INSERT INTO conversations(user_id, created_at, updated_at) VALUES (?, ?, ?)",
-            (user_id, now, now),
+            "INSERT INTO conversations(user_id, created_at, updated_at, topic_state) VALUES (?, ?, ?, ?)",
+            (user_id, now, now, initial_topic_state),
         )
-        return int(cursor.lastrowid)
+        return {"id": int(cursor.lastrowid), "topic_state": initial_topic_state}
 
 
 def _recent_history(conversation_id: int) -> list[dict[str, str]]:
@@ -175,17 +178,27 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         raise HTTPException(status_code=403, detail="consent_required")
 
     message = payload.message.strip()
-    conversation_id = _get_or_create_conversation(int(user["id"]))
+    conversation = _get_or_create_conversation(int(user["id"]))
+    conversation_id = int(conversation["id"])
+    previous_topic_state = parse_topic_state(conversation.get("topic_state"))
     history = _recent_history(conversation_id)
     risk_text = "\n".join([item["content"] for item in history if item.get("role") == "user"] + [message])
     risk = assess_risk(risk_text)
-    next_topic_focus = choose_next_topic_focus(risk)
-    model_output, _json_valid = model_client.generate_json(
+    topic_state, next_topic_focus = advance_topic_state(previous_topic_state, risk)
+    stop_decision = decide_stop(message, risk, topic_state)
+    topic_state = apply_stop_decision(topic_state, stop_decision)
+    if stop_decision.should_stop:
+        next_topic_focus = END_FOCUS
+        topic_state.current_topic = END_FOCUS.topic
+    model_backend = "deepseek" if model_client.is_available and risk.level != "high" else "fallback"
+    model_output, json_valid = model_client.generate_json(
         user_message=message,
         risk=risk,
         history=history,
         patient_info=_patient_info(user),
         next_topic_focus=next_topic_focus,
+        topic_state=topic_state,
+        stop_decision=stop_decision,
     )
 
     with get_conn() as conn:
@@ -198,10 +211,17 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
             "INSERT INTO messages(conversation_id, role, content, risk_level, created_at) VALUES (?, ?, ?, ?, ?)",
             (conversation_id, "assistant", model_output.assistant_reply, risk.level, now),
         )
-        conn.execute("UPDATE conversations SET updated_at = ? WHERE id = ?", (now, conversation_id))
+        conn.execute(
+            "UPDATE conversations SET updated_at = ?, topic_state = ? WHERE id = ?",
+            (now, dump_topic_state(topic_state), conversation_id),
+        )
 
     return ChatResponse(
         assistant_reply=model_output.assistant_reply,
         risk=risk,
         next_topic_focus=next_topic_focus,
+        topic_state=topic_state,
+        stop_decision=stop_decision,
+        model_backend=model_backend,
+        model_json_valid=json_valid,
     )

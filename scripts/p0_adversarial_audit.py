@@ -12,6 +12,8 @@ sys.path.insert(0, str(ROOT_DIR / "src"))
 
 from product_app.deepseek_client import DeepSeekChatClient
 from product_app.risk import assess_risk
+from product_app.stop import decide_stop
+from product_app.topics import advance_topic_state, default_topic_state
 
 
 SAMPLES = [
@@ -46,7 +48,17 @@ def run_deepseek_json_check() -> dict:
         return {"skipped": True, "reason": "DEEPSEEK_API_KEY not set"}
     client = DeepSeekChatClient()
     risk = assess_risk("我最近很绝望，晚上睡不好。")
-    output, valid = client.generate_json("我最近很绝望，晚上睡不好。", risk, history=[])
+    topic_state, next_topic_focus = advance_topic_state(default_topic_state(), risk)
+    stop_decision = decide_stop("我最近很绝望，晚上睡不好。", risk, topic_state)
+    output, valid = client.generate_json(
+        "我最近很绝望，晚上睡不好。",
+        risk,
+        history=[],
+        patient_info={"profile_status": "not_collected"},
+        next_topic_focus=next_topic_focus,
+        topic_state=topic_state,
+        stop_decision=stop_decision,
+    )
     if hasattr(output, "model_dump"):
         payload = output.model_dump()
     else:
@@ -64,4 +76,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

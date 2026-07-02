@@ -2,6 +2,8 @@
 
 A full-stack pipeline for building and evaluating an AI-assisted depression support dialogue system. The project covers synthetic dialogue generation, depression-score distillation, SFT data preparation, model training (via LLaMA-Factory), local inference with a Gradio UI, and evaluation with a local benchmark. An optional RAG module augments responses with psychology literature and methodology.
 
+The repository also includes a P0 product demo for psychological dialogue assistance, risk judgment, persistent topic coverage, and natural session closure reports. See `docs/P0_IMPLEMENTATION_RECORD.md` for the current product implementation record.
+
 ## Overview
 
 The system is designed to support research and development of conversational agents for mental health: it generates realistic doctor–patient multi-turn dialogues, assigns depression-related scores (and clinical-scale proxies) through a teacher–student distillation process, and uses those labels both for supervised fine-tuning and for evaluation. This keeps training and evaluation on a consistent scoring scheme while reducing reliance on expensive human annotations.
@@ -62,6 +64,10 @@ The system is designed to support research and development of conversational age
 | `eval/` | Top-level eval docs and pointers to MindEval. |
 | `rag/` | RAG pipeline: PDF/text ingestion, vector store, and retrieval for psychology content; see `rag/README.md`. |
 | `scripts/` | Unified workflow script that chains distillation → SFT conversion → benchmark dataset build → benchmark run. |
+| `src/product_app/` | FastAPI P0 product backend: auth, consent, chat, risk, topic state, stop logic, DeepSeek JSON client. |
+| `frontend/` | Vue 3 P0 product frontend. |
+| `api/` | Vercel Python function entrypoint for the product backend. |
+| `docs/` | Product plan, implementation record, and deployment notes. |
 
 ## Dependencies and Integration
 
@@ -75,3 +81,20 @@ The system is designed to support research and development of conversational age
 - [MindEval](https://github.com/SWORDHealth/mind-eval) — multi-turn mental health support benchmark; see `eval/README.md` for how to plug in this project’s model.
 
 For step-by-step setup, environment variables, and one-shot script usage, see the docs in `training/README.md`, `eval/README.md`, `eval/benchmark_v2/README.md`, and `scripts/run_unified_workflow.sh`.
+
+## P0 Product Demo
+
+Local development:
+
+```bash
+PYTHONPATH=src python -m uvicorn product_app.main:app --host 127.0.0.1 --port 8000
+npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
+```
+
+DeepSeek API is optional for local startup. Without `DEEPSEEK_API_KEY`, the app uses fallback replies and the frontend status panel shows `fallback`.
+
+Deployment details:
+
+- `docs/P0_PRODUCT_PLAN.md`
+- `docs/P0_IMPLEMENTATION_RECORD.md`
+- `docs/DEPLOYMENT.md`

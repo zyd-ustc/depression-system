@@ -1,6 +1,88 @@
-# 服务器部署流程
+# 部署流程
 
-以下流程面向单机 P0 部署：FastAPI + SQLite + Nginx + systemd。
+当前 P0 有两种部署方式：
+
+- Vercel demo：`frontend/` 静态构建 + `api/index.py` Python 函数；
+- 单机部署：FastAPI + SQLite + Nginx + systemd。
+
+生产环境不建议继续使用 SQLite 和 Vercel `/tmp` 数据库作为长期存储。
+
+## A. Vercel demo 部署
+
+### 1. 导入项目
+
+在 Vercel 中 Import Git Repository。
+
+Application Preset 选择：
+
+```text
+Other
+```
+
+当前仓库根目录已经提供：
+
+- `package.json`：根构建命令；
+- `frontend/package.json`：Vue 前端；
+- `api/index.py`：FastAPI Vercel 入口；
+- `vercel.json`：构建输出与 rewrite。
+
+### 2. Build 配置
+
+保持仓库默认配置：
+
+```text
+Build Command: npm run build
+Output Directory: frontend/dist
+Install Command: 默认
+```
+
+`vercel.json` 已配置：
+
+- `/api/*` 转发到 `api/index.py`；
+- 其他路径返回前端 `index.html`。
+
+### 3. 环境变量
+
+Vercel Project Settings -> Environment Variables：
+
+```bash
+APP_SECRET=replace-with-a-random-long-string
+CONSENT_VERSION=p0-placeholder
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
+DEEPSEEK_TIMEOUT_SECONDS=30
+```
+
+如果没有 `DEEPSEEK_API_KEY`，服务仍会运行，但前端状态栏会显示：
+
+```text
+fallback
+```
+
+配置 DeepSeek 后重新部署，状态栏应显示：
+
+```text
+deepseek
+```
+
+如果模型返回非法 JSON，系统会 fallback，并显示：
+
+```text
+deepseek / json-failed
+```
+
+### 4. Vercel 数据限制
+
+Vercel demo 默认数据库路径是：
+
+```text
+/tmp/product_app.sqlite3
+```
+
+这只适合 demo。函数实例重启、扩缩容或冷启动后，数据可能丢失或不一致。生产应迁移到外部数据库。
+
+## B. 单机服务器部署
 
 ## 1. 准备服务器
 
@@ -72,6 +154,20 @@ PYTHONPATH=src uvicorn product_app.main:app --host 127.0.0.1 --port 8000
 http://服务器IP:8000
 ```
 
+如果要使用当前 Vue 前端，而不是旧的 FastAPI 静态页，建议同时构建 `frontend/` 并由 Nginx 托管静态文件，再把 `/api/` 代理到 FastAPI。
+
+构建前端：
+
+```bash
+npm run build
+```
+
+前端产物：
+
+```text
+frontend/dist
+```
+
 ## 6. systemd 服务
 
 创建 `/etc/systemd/system/depression-product.service`：
@@ -119,6 +215,8 @@ sudo journalctl -u depression-product -f
 
 ## 7. Nginx 反向代理
 
+推荐配置：前端静态文件由 Nginx 托管，API 代理到 FastAPI。
+
 创建 `/etc/nginx/sites-available/depression-product`：
 
 ```nginx
@@ -129,6 +227,11 @@ server {
     client_max_body_size 2m;
 
     location / {
+        root /opt/depression-system/frontend/dist;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

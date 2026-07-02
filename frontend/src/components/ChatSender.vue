@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Promotion } from '@element-plus/icons-vue';
 import { ref } from 'vue';
 
 defineProps<{
@@ -23,16 +24,20 @@ function submit() {
 
 <template>
   <form class="sender" @submit.prevent="submit">
+    <span class="sender-mark">INPUT</span>
     <el-input
       v-model="value"
       type="textarea"
       :rows="3"
       resize="none"
-      placeholder="写下你现在最想说的一句话"
+      placeholder="写下此刻最真实的一句话"
       @keydown.meta.enter.prevent="submit"
       @keydown.ctrl.enter.prevent="submit"
     />
     <el-button type="primary" native-type="submit" :loading="loading">
+      <el-icon>
+        <Promotion />
+      </el-icon>
       发送
     </el-button>
   </form>

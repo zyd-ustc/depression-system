@@ -6,6 +6,9 @@ from pydantic import BaseModel, Field
 
 
 RiskLevel = Literal["low", "medium", "high"]
+TopicStage = Literal["warmup", "planned"]
+SessionStatus = Literal["active", "ended"]
+StopReason = Literal["continue", "user_requested_end", "planned_topics_covered"]
 
 
 class LoginRequest(BaseModel):
@@ -45,6 +48,25 @@ class NextTopicFocus(BaseModel):
     prompt_instruction: str
 
 
+class ConversationTopicState(BaseModel):
+    stage: TopicStage = "warmup"
+    warmup_turns: int = 0
+    planned_topics: list[str] = Field(default_factory=list)
+    covered_topics: list[str] = Field(default_factory=list)
+    observed_topics: list[str] = Field(default_factory=list)
+    current_topic: str | None = None
+    session_status: SessionStatus = "active"
+    stop_reason: StopReason | None = None
+
+
+class DialogueStopDecision(BaseModel):
+    should_stop: bool = False
+    reason: StopReason = "continue"
+    report_required: bool = False
+    rationale: str = ""
+    prompt_instruction: str = ""
+
+
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
 
@@ -57,3 +79,7 @@ class ChatResponse(BaseModel):
     assistant_reply: str
     risk: RiskAssessment
     next_topic_focus: NextTopicFocus
+    topic_state: ConversationTopicState
+    stop_decision: DialogueStopDecision
+    model_backend: Literal["deepseek", "fallback"]
+    model_json_valid: bool

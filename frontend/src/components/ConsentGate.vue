@@ -30,7 +30,7 @@ async function submit() {
 </script>
 
 <template>
-  <el-dialog :model-value="visible" width="380px" :show-close="false" align-center>
+  <el-dialog :model-value="visible" width="380px" :show-close="false" align-center class="consent-dialog">
     <template #header>
       <div class="dialog-head">
         <h2>使用确认</h2>

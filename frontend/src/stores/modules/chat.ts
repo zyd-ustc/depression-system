@@ -1,4 +1,10 @@
-import type { ChatResponse, NextTopicFocus, RiskAssessment } from '@/api/types';
+import type {
+  ChatResponse,
+  ConversationTopicState,
+  DialogueStopDecision,
+  NextTopicFocus,
+  RiskAssessment,
+} from '@/api/types';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { sendChat } from '@/api/chat';
@@ -13,6 +19,10 @@ export const useChatStore = defineStore('chat', () => {
   const loading = ref(false);
   const risk = ref<RiskAssessment | null>(null);
   const nextTopic = ref<NextTopicFocus | null>(null);
+  const topicState = ref<ConversationTopicState | null>(null);
+  const stopDecision = ref<DialogueStopDecision | null>(null);
+  const modelBackend = ref<'deepseek' | 'fallback' | null>(null);
+  const modelJsonValid = ref<boolean | null>(null);
 
   function append(role: ChatMessage['role'], content: string) {
     messages.value.push({ role, content });
@@ -22,6 +32,10 @@ export const useChatStore = defineStore('chat', () => {
     append('assistant', response.assistant_reply);
     risk.value = response.risk;
     nextTopic.value = response.next_topic_focus;
+    topicState.value = response.topic_state;
+    stopDecision.value = response.stop_decision;
+    modelBackend.value = response.model_backend;
+    modelJsonValid.value = response.model_json_valid;
   }
 
   async function send(message: string) {
@@ -45,6 +59,10 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = [];
     risk.value = null;
     nextTopic.value = null;
+    topicState.value = null;
+    stopDecision.value = null;
+    modelBackend.value = null;
+    modelJsonValid.value = null;
   }
 
   return {
@@ -52,6 +70,10 @@ export const useChatStore = defineStore('chat', () => {
     loading,
     risk,
     nextTopic,
+    topicState,
+    stopDecision,
+    modelBackend,
+    modelJsonValid,
     append,
     send,
     clear,
