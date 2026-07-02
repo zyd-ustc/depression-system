@@ -2,6 +2,7 @@ import type {
   ChatResponse,
   ConversationTopicState,
   DialogueStopDecision,
+  MonitorResponse,
   NextTopicFocus,
   RiskAssessment,
 } from '@/api/types';
@@ -36,6 +37,33 @@ export const useChatStore = defineStore('chat', () => {
     stopDecision.value = response.stop_decision;
     modelBackend.value = response.model_backend;
     modelJsonValid.value = response.model_json_valid;
+  }
+
+  function hydrateFromMonitor(response: MonitorResponse) {
+    messages.value = response.messages.map(item => ({
+      role: item.role,
+      content: item.content,
+    }));
+    risk.value = response.current_status.risk;
+    topicState.value = response.topic_state;
+    nextTopic.value = response.current_status.current_topic
+      ? {
+          topic: response.current_status.current_topic,
+          objective: '',
+          prompt_instruction: '',
+        }
+      : null;
+    stopDecision.value = response.current_status.stop_reason
+      ? {
+          should_stop: response.current_status.session_status === 'ended',
+          reason: response.current_status.stop_reason,
+          report_required: false,
+          rationale: '',
+          prompt_instruction: '',
+        }
+      : null;
+    modelBackend.value = null;
+    modelJsonValid.value = null;
   }
 
   async function send(message: string) {
@@ -76,6 +104,7 @@ export const useChatStore = defineStore('chat', () => {
     modelBackend,
     modelJsonValid,
     append,
+    hydrateFromMonitor,
     send,
     clear,
   };

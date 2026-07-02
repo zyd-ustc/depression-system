@@ -166,28 +166,32 @@ def _get_or_create_conversation(user_id: int) -> dict:
         return {"id": int(cursor.lastrowid), "topic_state": initial_topic_state}
 
 
-def _recent_history(conversation_id: int) -> list[dict[str, str]]:
+def _conversation_history(conversation_id: int, limit: int | None = None) -> list[dict[str, str]]:
+    limit_clause = "LIMIT ?" if limit is not None else ""
+    params: tuple[int, ...] = (conversation_id, limit) if limit is not None else (conversation_id,)
     with get_conn() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT role, content FROM messages
             WHERE conversation_id = ?
-            ORDER BY id DESC LIMIT ?
+            ORDER BY id DESC {limit_clause}
             """,
-            (conversation_id, settings.MAX_HISTORY_MESSAGES),
+            params,
         ).fetchall()
     return [{"role": row["role"], "content": row["content"]} for row in reversed(rows)]
 
 
-def _conversation_messages(conversation_id: int, limit: int = 120) -> list[dict]:
+def _conversation_messages(conversation_id: int, limit: int | None = None) -> list[dict]:
+    limit_clause = "LIMIT ?" if limit is not None else ""
+    params: tuple[int, ...] = (conversation_id, limit) if limit is not None else (conversation_id,)
     with get_conn() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT role, content, risk_level, created_at FROM messages
             WHERE conversation_id = ?
-            ORDER BY id DESC LIMIT ?
+            ORDER BY id DESC {limit_clause}
             """,
-            (conversation_id, limit),
+            params,
         ).fetchall()
     return [row_to_dict(row) for row in reversed(rows)]
 
@@ -210,7 +214,7 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
     conversation = _get_or_create_conversation(int(user["id"]))
     conversation_id = int(conversation["id"])
     previous_topic_state = parse_topic_state(conversation.get("topic_state"))
-    history = _recent_history(conversation_id)
+    history = _conversation_history(conversation_id)
     risk_text = "\n".join([item["content"] for item in history if item.get("role") == "user"] + [message])
     risk = assess_risk(risk_text)
     early_stop_decision = decide_stop(message, risk, previous_topic_state)

@@ -46,6 +46,8 @@ SQLite 默认位置：
 - `messages`：用户和助手消息；
 - `sessions`：旧 session 表保留，当前 token 主要使用签名 token。
 
+聊天页刷新后会从当前会话恢复后端 `messages`，避免只依赖前端内存导致历史消失。
+
 `topic_state` 是 JSON 字符串，当前字段包括：
 
 - `stage`：`warmup` 或 `planned`；
@@ -123,6 +125,12 @@ DeepSeek 使用 OpenAI-compatible API：
 - `DEEPSEEK_TIMEOUT_SECONDS`
 
 如果没有 `DEEPSEEK_API_KEY`，或 SDK 初始化失败，则走本地 fallback。
+
+对话历史策略：
+
+- 风险判断和预热摘要使用当前会话完整用户历史；
+- `conversation_history_json` 给模型时仍保留上限保护，默认 `MAX_HISTORY_MESSAGES=80`；
+- 后台监控接口默认返回当前会话完整历史。
 
 前端状态栏会显示：
 

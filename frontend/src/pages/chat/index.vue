@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { me } from '@/api/auth';
+import { fetchCurrentMonitor } from '@/api/monitor';
 import ChatSender from '@/components/ChatSender.vue';
 import ConsentGate from '@/components/ConsentGate.vue';
 import LoginDialog from '@/components/LoginDialog.vue';
@@ -18,7 +19,7 @@ const messageListRef = ref<HTMLElement | null>(null);
 
 const canChat = computed(() => userStore.isAuthed && !userStore.consentRequired);
 const userLabel = computed(() => userStore.username || '未登录');
-const turnCount = computed(() => chatStore.messages.filter(item => item.role !== 'system').length);
+const turnCount = computed(() => chatStore.messages.filter(item => item.role === 'user').length);
 const sessionEnded = computed(() => chatStore.topicState?.session_status === 'ended');
 
 watch(
@@ -34,12 +35,23 @@ onMounted(async () => {
     showLogin.value = true;
     return;
   }
+  let payload;
   try {
-    const payload = await me();
+    payload = await me();
     userStore.setAuth(payload);
   }
   catch {
     showLogin.value = true;
+    return;
+  }
+  if (!payload.consent_required && chatStore.messages.length === 0) {
+    try {
+      const monitor = await fetchCurrentMonitor();
+      chatStore.hydrateFromMonitor(monitor);
+    }
+    catch {
+      // History hydration is best-effort; sending a new message can still continue the session.
+    }
   }
 });
 
@@ -94,7 +106,7 @@ async function handleSubmit(message: string) {
       <section class="conversation">
         <header class="conversation-head">
           <span>SESSION</span>
-          <span>{{ turnCount }} LINES</span>
+          <span>{{ turnCount }} TURNS</span>
         </header>
 
         <div ref="messageListRef" class="messages">
