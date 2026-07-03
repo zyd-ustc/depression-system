@@ -3,11 +3,6 @@ from __future__ import annotations
 import json
 
 from product_app.config import settings
-from product_app.ragflow_client import (
-    RagFlowRetrievalClient,
-    build_ragflow_question,
-    empty_rag_context,
-)
 from product_app.risk import high_risk_reply
 from product_app.schemas import (
     ChatModelOutput,
@@ -151,7 +146,6 @@ class DeepSeekChatClient:
         self.model_name = settings.DEEPSEEK_MODEL
         self.enabled = bool(settings.DEEPSEEK_API_KEY)
         self._client = None
-        self._ragflow = RagFlowRetrievalClient()
         if self.enabled:
             try:
                 from openai import OpenAI
@@ -192,12 +186,6 @@ class DeepSeekChatClient:
         if stop_decision.reason == "already_ended":
             return _fallback_reply(user_message, risk, next_topic_focus, topic_state, stop_decision), True
 
-        rag_context = empty_rag_context()
-        if not stop_decision.should_stop:
-            rag_context = self._ragflow.retrieve(
-                build_ragflow_question(user_message, risk, next_topic_focus, topic_state)
-            )
-
         messages = self._build_messages(
             user_message,
             risk,
@@ -206,7 +194,6 @@ class DeepSeekChatClient:
             next_topic_focus,
             topic_state,
             stop_decision,
-            rag_context,
         )
         try:
             response = self._client.chat.completions.create(
@@ -238,7 +225,6 @@ class DeepSeekChatClient:
         next_topic_focus: NextTopicFocus,
         topic_state: ConversationTopicState,
         stop_decision: DialogueStopDecision,
-        rag_context: dict | None = None,
     ) -> list[dict[str, str]]:
         system = (
             "你必须扮演一名专业、温和、稳重的心理咨询师，与来访者进行心理支持对话。"
@@ -260,10 +246,6 @@ class DeepSeekChatClient:
             "对话风格：中文、口语化、自然、简洁、具体；先回应情绪，再问一个问题或给一个小步骤。"
             "安全要求：不要输出自伤、自杀、药物滥用或其他危险行为的方法、步骤、工具、剂量或地点。"
             "如果风险为 high，只做安全支持和线下求助引导。"
-            "如果 rag_context_json.enabled 为 true，只能把 rag_context_json.chunks 当作背景参考资料；"
-            "不得逐字照搬，不得把资料包装成诊断依据。"
-            "若参考资料与 risk_assessment_json、stop_decision_json、next_topic_focus_json 或安全要求冲突，"
-            "必须优先遵守本系统风险与安全策略。"
             "不要向用户展示临床量表分数、诊断标签或类似“你是中度抑郁”的结论。"
             "必须只输出合法 JSON，不要使用 Markdown，不要添加 JSON 以外文字。"
             "JSON 只允许包含 assistant_reply 一个 key。"
@@ -283,7 +265,6 @@ class DeepSeekChatClient:
             "topic_state_json": _as_dict(topic_state),
             "stop_decision_json": _as_dict(stop_decision),
             "next_topic_focus_json": _as_dict(next_topic_focus),
-            "rag_context_json": rag_context or empty_rag_context(),
             "dialogue_policy_json": {
                 "role": "professional_psychological_counselor",
                 "single_turn_goal": "respond_empathically_and_advance_one_focus_topic",
