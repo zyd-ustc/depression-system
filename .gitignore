@@ -40,6 +40,8 @@ data/generate/DataSynBias/
 data/generate/processed/
 training/score_distill/artifacts/
 data/processed/
+data/knowledge_index.db
+data/knowledge_index.db-*
 data/profiles.jsonl
 media/
 eval/benchmark_v2/outputs/
