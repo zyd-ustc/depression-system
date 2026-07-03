@@ -23,6 +23,8 @@ class ProductSettings:
     APP_SECRET = os.getenv("APP_SECRET", "vercel-demo-change-me")
     CONSENT_VERSION = os.getenv("CONSENT_VERSION", "p0-placeholder")
     DATABASE_URL = os.getenv("PRODUCT_DB_PATH", _default_db_path())
+    ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123456")
 
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
     DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")

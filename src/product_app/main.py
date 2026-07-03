@@ -8,9 +8,11 @@ from fastapi.staticfiles import StaticFiles
 
 from product_app.config import settings
 from product_app.db import get_conn, init_db, row_to_dict, utc_now
-from product_app.deepseek_client import DeepSeekChatClient
+from product_app.deepseek_client import DeepSeekChatClient, WARMUP_SUMMARY_TOPIC
 from product_app.risk import assess_risk
+from product_app.safety_notice import build_safety_notice
 from product_app.schemas import (
+    AdminMonitorResponse,
     AuthResponse,
     ChatRequest,
     ChatResponse,
@@ -21,7 +23,7 @@ from product_app.schemas import (
     MonitorResponse,
     MonitorWarmupState,
 )
-from product_app.security import hash_password, make_auth_token, read_auth_token, verify_password
+from product_app.security import hash_password, make_auth_token, read_auth_token, stable_user_id, verify_password
 from product_app.stop import END_FOCUS, apply_stop_decision, decide_stop
 from product_app.topics import WARMUP_MAX_TURNS, advance_topic_state, default_topic_state, dump_topic_state, parse_topic_state
 
@@ -44,10 +46,22 @@ def _current_user(authorization: str = Header(default="")) -> dict:
     user = read_auth_token(token, settings.APP_SECRET)
     if user is None:
         raise HTTPException(status_code=401, detail="invalid_token")
+    user["role"] = user.get("role") or "user"
     return user
 
 
+def _is_admin(user: dict) -> bool:
+    return user.get("role") == "admin"
+
+
+def _require_admin(user: dict) -> None:
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="admin_required")
+
+
 def _consent_required(user: dict) -> bool:
+    if _is_admin(user):
+        return False
     return user.get("consent_version") != settings.CONSENT_VERSION or not user.get("consent_at")
 
 
@@ -55,6 +69,7 @@ def _auth_response(token: str, user: dict) -> AuthResponse:
     return AuthResponse(
         token=token,
         username=user["username"],
+        role=user.get("role", "user"),
         consent_required=_consent_required(user),
         consent_version=settings.CONSENT_VERSION,
     )
@@ -66,6 +81,7 @@ def _token_for_user(user: dict) -> str:
         secret=settings.APP_SECRET,
         consent_version=user.get("consent_version"),
         consent_at=user.get("consent_at"),
+        role=user.get("role", "user"),
     )
 
 
@@ -94,6 +110,8 @@ def register(payload: LoginRequest) -> AuthResponse:
     username = payload.username.strip()
     if not username:
         raise HTTPException(status_code=400, detail="empty_username")
+    if username == settings.ADMIN_USERNAME:
+        raise HTTPException(status_code=409, detail="username_reserved")
     with get_conn() as conn:
         try:
             conn.execute(
@@ -111,12 +129,25 @@ def register(payload: LoginRequest) -> AuthResponse:
 
 @app.post("/api/auth/login", response_model=AuthResponse)
 def login(payload: LoginRequest) -> AuthResponse:
+    username = payload.username.strip()
+    if username == settings.ADMIN_USERNAME and payload.password == settings.ADMIN_PASSWORD:
+        admin_user = {
+            "id": stable_user_id(username),
+            "username": username,
+            "role": "admin",
+            "consent_version": settings.CONSENT_VERSION,
+            "consent_at": utc_now(),
+        }
+        token = _token_for_user(admin_user)
+        return _auth_response(token, admin_user)
+
     with get_conn() as conn:
         user = row_to_dict(
-            conn.execute("SELECT * FROM users WHERE username = ?", (payload.username.strip(),)).fetchone()
+            conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         )
         if user is None or not verify_password(payload.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="invalid_credentials")
+        user["role"] = "user"
         token = _token_for_user(user)
     return _auth_response(token, user)
 
@@ -212,8 +243,102 @@ def _latest_conversation(user_id: int) -> dict | None:
     return row_to_dict(row)
 
 
+def _usernames_by_stable_id() -> dict[int, str]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT username FROM users ORDER BY username").fetchall()
+    return {stable_user_id(row["username"]): row["username"] for row in rows}
+
+
+def _all_conversations() -> list[dict]:
+    usernames = _usernames_by_stable_id()
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, user_id, updated_at, topic_state FROM conversations
+            ORDER BY updated_at DESC
+            """
+        ).fetchall()
+    conversations = []
+    for row in rows:
+        item = row_to_dict(row)
+        user_id = int(item["user_id"])
+        item["username"] = usernames.get(user_id, f"user_{user_id}")
+        conversations.append(item)
+    return conversations
+
+
+def _empty_monitor_response(username: str) -> MonitorResponse:
+    topic_state = default_topic_state()
+    risk = assess_risk("")
+    return MonitorResponse(
+        username=username,
+        conversation_id=None,
+        warmup=MonitorWarmupState(
+            stage=topic_state.stage,
+            warmup_turns=topic_state.warmup_turns,
+            max_warmup_turns=WARMUP_MAX_TURNS,
+            completed=topic_state.warmup_completed,
+            topic_list=[],
+        ),
+        patient_preliminary_info=topic_state.warmup_result.patient_preliminary_info,
+        symptom_judgment=topic_state.warmup_result.symptom_judgment,
+        messages=[],
+        current_status=MonitorCurrentStatus(
+            session_status=topic_state.session_status,
+            stop_reason=topic_state.stop_reason,
+            current_topic=topic_state.current_topic,
+            remaining_topics=[],
+            risk=risk,
+            observed_topics=[],
+            updated_at=None,
+        ),
+        topic_state=topic_state,
+    )
+
+
+def _build_monitor_response(username: str, conversation: dict | None) -> MonitorResponse:
+    if conversation is None:
+        return _empty_monitor_response(username)
+
+    conversation_id = int(conversation["id"])
+    topic_state = parse_topic_state(conversation.get("topic_state"))
+    messages = _conversation_messages(conversation_id)
+    risk_text = "\n".join([item["content"] for item in messages if item.get("role") == "user"])
+    risk = assess_risk(risk_text)
+    covered = set(topic_state.covered_topics)
+    remaining = [topic for topic in topic_state.planned_topics if topic not in covered]
+    warmup_result = topic_state.warmup_result
+
+    return MonitorResponse(
+        username=username,
+        conversation_id=conversation_id,
+        warmup=MonitorWarmupState(
+            stage=topic_state.stage,
+            warmup_turns=topic_state.warmup_turns,
+            max_warmup_turns=WARMUP_MAX_TURNS,
+            completed=topic_state.warmup_completed or warmup_result.completed,
+            topic_list=warmup_result.topic_list or topic_state.planned_topics,
+        ),
+        patient_preliminary_info=warmup_result.patient_preliminary_info,
+        symptom_judgment=warmup_result.symptom_judgment,
+        messages=messages,
+        current_status=MonitorCurrentStatus(
+            session_status=topic_state.session_status,
+            stop_reason=topic_state.stop_reason,
+            current_topic=topic_state.current_topic,
+            remaining_topics=remaining,
+            risk=risk,
+            observed_topics=topic_state.observed_topics,
+            updated_at=conversation.get("updated_at"),
+        ),
+        topic_state=topic_state,
+    )
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatResponse:
+    if _is_admin(user):
+        raise HTTPException(status_code=403, detail="admin_cannot_chat")
     if _consent_required(user):
         raise HTTPException(status_code=403, detail="consent_required")
 
@@ -243,9 +368,9 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
             next_topic_focus = END_FOCUS
             topic_state.current_topic = END_FOCUS.topic
     model_backend = "deepseek" if model_client.is_available and risk.level != "high" else "fallback"
-    if stop_decision.reason == "already_ended":
+    if stop_decision.reason == "already_ended" or next_topic_focus.topic == WARMUP_SUMMARY_TOPIC:
         model_backend = "fallback"
-    model_output, json_valid = model_client.generate_json(
+    generation = model_client.generate_json(
         user_message=message,
         risk=risk,
         history=history,
@@ -254,6 +379,8 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         topic_state=topic_state,
         stop_decision=stop_decision,
     )
+    model_output = generation.output
+    safety_notice = build_safety_notice(risk, next_topic_focus, topic_state, stop_decision)
 
     with get_conn() as conn:
         now = utc_now()
@@ -273,79 +400,32 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
     return ChatResponse(
         conversation_id=conversation_id,
         assistant_reply=model_output.assistant_reply,
+        safety_notice=safety_notice,
+        rag_context=generation.rag_context,
+        tone_skill=generation.tone_skill,
         risk=risk,
         next_topic_focus=next_topic_focus,
         topic_state=topic_state,
         stop_decision=stop_decision,
         model_backend=model_backend,
-        model_json_valid=json_valid,
+        model_json_valid=generation.json_valid,
     )
 
 
-@app.get("/api/monitor/current", response_model=MonitorResponse)
-def monitor_current(user: dict = Depends(_current_user)) -> MonitorResponse:
+@app.get("/api/conversations/latest", response_model=MonitorResponse)
+def latest_conversation(user: dict = Depends(_current_user)) -> MonitorResponse:
+    if _is_admin(user):
+        raise HTTPException(status_code=403, detail="admin_cannot_use_patient_conversation")
     if _consent_required(user):
         raise HTTPException(status_code=403, detail="consent_required")
 
     conversation = _latest_conversation(int(user["id"]))
-    if conversation is None:
-        topic_state = default_topic_state()
-        risk = assess_risk("")
-        return MonitorResponse(
-            username=user["username"],
-            conversation_id=None,
-            warmup=MonitorWarmupState(
-                stage=topic_state.stage,
-                warmup_turns=topic_state.warmup_turns,
-                max_warmup_turns=WARMUP_MAX_TURNS,
-                completed=topic_state.warmup_completed,
-                topic_list=[],
-            ),
-            patient_preliminary_info=topic_state.warmup_result.patient_preliminary_info,
-            symptom_judgment=topic_state.warmup_result.symptom_judgment,
-            messages=[],
-            current_status=MonitorCurrentStatus(
-                session_status=topic_state.session_status,
-                stop_reason=topic_state.stop_reason,
-                current_topic=topic_state.current_topic,
-                remaining_topics=[],
-                risk=risk,
-                observed_topics=[],
-                updated_at=None,
-            ),
-            topic_state=topic_state,
-        )
+    return _build_monitor_response(user["username"], conversation)
 
-    conversation_id = int(conversation["id"])
-    topic_state = parse_topic_state(conversation.get("topic_state"))
-    messages = _conversation_messages(conversation_id)
-    risk_text = "\n".join([item["content"] for item in messages if item.get("role") == "user"])
-    risk = assess_risk(risk_text)
-    covered = set(topic_state.covered_topics)
-    remaining = [topic for topic in topic_state.planned_topics if topic not in covered]
-    warmup_result = topic_state.warmup_result
 
-    return MonitorResponse(
-        username=user["username"],
-        conversation_id=conversation_id,
-        warmup=MonitorWarmupState(
-            stage=topic_state.stage,
-            warmup_turns=topic_state.warmup_turns,
-            max_warmup_turns=WARMUP_MAX_TURNS,
-            completed=topic_state.warmup_completed or warmup_result.completed,
-            topic_list=warmup_result.topic_list or topic_state.planned_topics,
-        ),
-        patient_preliminary_info=warmup_result.patient_preliminary_info,
-        symptom_judgment=warmup_result.symptom_judgment,
-        messages=messages,
-        current_status=MonitorCurrentStatus(
-            session_status=topic_state.session_status,
-            stop_reason=topic_state.stop_reason,
-            current_topic=topic_state.current_topic,
-            remaining_topics=remaining,
-            risk=risk,
-            observed_topics=topic_state.observed_topics,
-            updated_at=conversation.get("updated_at"),
-        ),
-        topic_state=topic_state,
-    )
+@app.get("/api/admin/monitor", response_model=AdminMonitorResponse)
+@app.get("/api/monitor/current", response_model=AdminMonitorResponse)
+def admin_monitor(user: dict = Depends(_current_user)) -> AdminMonitorResponse:
+    _require_admin(user)
+    conversations = [_build_monitor_response(item["username"], item) for item in _all_conversations()]
+    return AdminMonitorResponse(conversations=conversations)

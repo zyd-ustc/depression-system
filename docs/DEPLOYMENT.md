@@ -48,6 +48,8 @@ Vercel Project Settings -> Environment Variables：
 ```bash
 APP_SECRET=replace-with-a-random-long-string
 CONSENT_VERSION=p0-placeholder
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
 DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-v4-flash
@@ -131,6 +133,8 @@ DEEPSEEK_MODEL=deepseek-v4-flash
 PRODUCT_DB_PATH=/opt/depression-system/data/product_app.sqlite3
 CONSENT_VERSION=p0-placeholder
 APP_SECRET=replace-with-a-random-long-string
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=replace-with-a-strong-admin-password
 HOST=127.0.0.1
 PORT=8000
 ```

@@ -5,7 +5,7 @@ import { ElMessage } from 'element-plus';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { me } from '@/api/auth';
-import { fetchCurrentMonitor } from '@/api/monitor';
+import { fetchAdminMonitor } from '@/api/monitor';
 import ConsentGate from '@/components/ConsentGate.vue';
 import LoginDialog from '@/components/LoginDialog.vue';
 import { useUserStore } from '@/stores';
@@ -14,11 +14,16 @@ const userStore = useUserStore();
 const router = useRouter();
 const showLogin = ref(false);
 const loading = ref(false);
-const monitor = ref<MonitorResponse | null>(null);
+const monitorList = ref<MonitorResponse[]>([]);
+const selectedConversationId = ref<number | null>(null);
 const lastError = ref('');
 let timer: number | undefined;
 
 const userLabel = computed(() => userStore.username || '未登录');
+const monitor = computed(() => {
+  if (!monitorList.value.length) return null;
+  return monitorList.value.find(item => item.conversation_id === selectedConversationId.value) ?? monitorList.value[0];
+});
 const warmupPercent = computed(() => {
   const warmup = monitor.value?.warmup;
   if (!warmup) return 0;
@@ -46,7 +51,12 @@ async function verifyAuth() {
   try {
     const payload = await me();
     userStore.setAuth(payload);
-    return !payload.consent_required;
+    if (payload.role !== 'admin') {
+      ElMessage.error('后台监控仅管理员可见');
+      await router.push('/');
+      return false;
+    }
+    return true;
   }
   catch {
     showLogin.value = true;
@@ -55,12 +65,16 @@ async function verifyAuth() {
 }
 
 async function loadMonitor(showToast = false) {
-  if (!userStore.isAuthed || userStore.consentRequired) {
+  if (!userStore.isAuthed || !userStore.isAdmin) {
     return;
   }
   loading.value = true;
   try {
-    monitor.value = await fetchCurrentMonitor();
+    const payload = await fetchAdminMonitor();
+    monitorList.value = payload.conversations;
+    if (!monitorList.value.some(item => item.conversation_id === selectedConversationId.value)) {
+      selectedConversationId.value = monitorList.value[0]?.conversation_id ?? null;
+    }
     lastError.value = '';
     if (showToast) ElMessage.success('监控已刷新');
   }
@@ -94,14 +108,24 @@ onUnmounted(() => {
 });
 
 watch(
-  () => [userStore.isAuthed, userStore.consentRequired],
-  async ([authed, consentRequired]) => {
-    if (authed && !consentRequired) {
-      await loadMonitor(false);
-      startPolling();
+  () => [userStore.isAuthed, userStore.isAdmin],
+  async ([authed, isAdmin]) => {
+    if (!authed) {
+      return;
     }
+    if (!isAdmin) {
+      ElMessage.error('后台监控仅管理员可见');
+      await router.push('/');
+      return;
+    }
+    await loadMonitor(false);
+    startPolling();
   },
 );
+
+function selectMonitor(item: MonitorResponse) {
+  selectedConversationId.value = item.conversation_id;
+}
 </script>
 
 <template>
@@ -131,6 +155,26 @@ watch(
     </section>
 
     <section class="monitor-grid">
+      <section class="monitor-panel user-list-panel">
+        <header>
+          <span>USERS</span>
+          <strong>{{ monitorList.length }} 会话</strong>
+        </header>
+        <div class="monitor-user-list">
+          <button
+            v-for="item in monitorList"
+            :key="item.conversation_id ?? `${item.username}-empty`"
+            type="button"
+            :class="{ 'is-active': item.conversation_id === monitor?.conversation_id }"
+            @click="selectMonitor(item)"
+          >
+            <span>{{ item.username }}</span>
+            <small>#{{ item.conversation_id ?? '-' }} / {{ item.current_status.session_status }}</small>
+          </button>
+          <p v-if="!monitorList.length" class="monitor-empty">暂无用户会话</p>
+        </div>
+      </section>
+
       <section class="monitor-panel warmup-panel">
         <header>
           <span>WARMUP</span>

@@ -4,7 +4,7 @@ import { ElMessage } from 'element-plus';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { me } from '@/api/auth';
-import { fetchCurrentMonitor } from '@/api/monitor';
+import { fetchLatestConversation } from '@/api/monitor';
 import ChatSender from '@/components/ChatSender.vue';
 import ConsentGate from '@/components/ConsentGate.vue';
 import LoginDialog from '@/components/LoginDialog.vue';
@@ -17,8 +17,11 @@ const router = useRouter();
 const showLogin = ref(false);
 const messageListRef = ref<HTMLElement | null>(null);
 
-const canChat = computed(() => userStore.isAuthed && !userStore.consentRequired);
-const userLabel = computed(() => userStore.username || '未登录');
+const canChat = computed(() => userStore.isAuthed && !userStore.consentRequired && !userStore.isAdmin);
+const userLabel = computed(() => {
+  if (!userStore.username) return '未登录';
+  return userStore.isAdmin ? `${userStore.username} / admin` : userStore.username;
+});
 const turnCount = computed(() => chatStore.messages.filter(item => item.role === 'user').length);
 const sessionEnded = computed(() => chatStore.topicState?.session_status === 'ended');
 
@@ -30,6 +33,15 @@ watch(
   },
 );
 
+watch(
+  () => userStore.isAdmin,
+  async isAdmin => {
+    if (isAdmin) {
+      await router.push('/monitor');
+    }
+  },
+);
+
 onMounted(async () => {
   if (!userStore.token) {
     showLogin.value = true;
@@ -38,6 +50,9 @@ onMounted(async () => {
   try {
     const payload = await me();
     userStore.setAuth(payload);
+    if (payload.role === 'admin') {
+      await router.push('/monitor');
+    }
   }
   catch {
     showLogin.value = true;
@@ -51,7 +66,7 @@ async function handleContinueLast() {
     return;
   }
   try {
-    const monitor = await fetchCurrentMonitor();
+    const monitor = await fetchLatestConversation();
     if (!monitor.conversation_id) {
       ElMessage.info('暂无可继续的会话');
       return;
@@ -104,18 +119,20 @@ async function handleSubmit(message: string) {
       <div class="top-actions">
         <span class="user-chip">{{ userLabel }}</span>
         <div class="button-stack">
-          <el-button v-if="userStore.isAuthed" @click="router.push('/monitor')">
+          <el-button v-if="userStore.isAdmin" @click="router.push('/monitor')">
             <el-icon>
               <Monitor />
             </el-icon>
             后台
           </el-button>
-          <el-button v-if="userStore.isAuthed" @click="handleContinueLast">
-            继续
-          </el-button>
-          <el-button v-if="userStore.isAuthed" @click="handleNewSession">
-            新会话
-          </el-button>
+          <template v-else-if="userStore.isAuthed">
+            <el-button @click="handleContinueLast">
+              继续
+            </el-button>
+            <el-button @click="handleNewSession">
+              新会话
+            </el-button>
+          </template>
           <el-button v-else @click="showLogin = true">登录</el-button>
         </div>
       </div>

@@ -48,7 +48,7 @@ def _b64decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + padding)
 
 
-def _user_id(username: str) -> int:
+def stable_user_id(username: str) -> int:
     digest = hashlib.sha256(username.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
 
@@ -58,10 +58,12 @@ def make_auth_token(
     secret: str,
     consent_version: str | None = None,
     consent_at: str | None = None,
+    role: str = "user",
 ) -> str:
     payload = {
-        "id": _user_id(username),
+        "id": stable_user_id(username),
         "username": username,
+        "role": role,
         "consent_version": consent_version or "",
         "consent_at": consent_at or "",
         "issued_at": datetime.now(timezone.utc).isoformat(),

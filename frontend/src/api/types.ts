@@ -1,9 +1,11 @@
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type StopReason = 'continue' | 'user_requested_end' | 'planned_topics_covered' | 'already_ended';
+export type UserRole = 'user' | 'admin';
 
 export interface AuthResponse {
   token: string;
   username: string;
+  role: UserRole;
   consent_required: boolean;
   consent_version: string;
 }
@@ -76,9 +78,47 @@ export interface DialogueStopDecision {
   prompt_instruction: string;
 }
 
+export interface SafetyNotice {
+  visible: boolean;
+  level: 'info' | 'caution' | 'urgent';
+  title: string;
+  message: string;
+  actions: string[];
+}
+
+export interface RagSource {
+  source: string | null;
+  section: string | null;
+  type: string | null;
+  rank: number | null;
+  char_count: number | null;
+}
+
+export interface RagContext {
+  enabled: boolean;
+  status: string;
+  query: string | null;
+  total_chunks_returned: number;
+  total_chars: number;
+  max_chars_limit: number;
+  sources: RagSource[];
+  note: string;
+}
+
+export interface ToneSkillState {
+  skill_id: string;
+  version: string;
+  status: 'placeholder' | 'active' | 'disabled';
+  profile: string;
+  rules: string[];
+}
+
 export interface ChatResponse {
   conversation_id: number;
   assistant_reply: string;
+  safety_notice: SafetyNotice | null;
+  rag_context: RagContext;
+  tone_skill: ToneSkillState;
   risk: RiskAssessment;
   next_topic_focus: NextTopicFocus;
   topic_state: ConversationTopicState;
@@ -121,4 +161,8 @@ export interface MonitorResponse {
   messages: ConversationMessage[];
   current_status: MonitorCurrentStatus;
   topic_state: ConversationTopicState;
+}
+
+export interface AdminMonitorResponse {
+  conversations: MonitorResponse[];
 }

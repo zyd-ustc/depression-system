@@ -50,7 +50,7 @@ def run_deepseek_json_check() -> dict:
     risk = assess_risk("我最近很绝望，晚上睡不好。")
     topic_state, next_topic_focus = advance_topic_state(default_topic_state(), risk)
     stop_decision = decide_stop("我最近很绝望，晚上睡不好。", risk, topic_state)
-    output, valid = client.generate_json(
+    generation = client.generate_json(
         "我最近很绝望，晚上睡不好。",
         risk,
         history=[],
@@ -59,11 +59,22 @@ def run_deepseek_json_check() -> dict:
         topic_state=topic_state,
         stop_decision=stop_decision,
     )
+    output = generation.output
     if hasattr(output, "model_dump"):
         payload = output.model_dump()
     else:
         payload = output.dict()
-    return {"skipped": False, "json_valid": valid, "payload": payload}
+    return {
+        "skipped": False,
+        "json_valid": generation.json_valid,
+        "payload": payload,
+        "rag_context": generation.rag_context.model_dump()
+        if hasattr(generation.rag_context, "model_dump")
+        else generation.rag_context.dict(),
+        "tone_skill": generation.tone_skill.model_dump()
+        if hasattr(generation.tone_skill, "model_dump")
+        else generation.tone_skill.dict(),
+    }
 
 
 def main() -> None:

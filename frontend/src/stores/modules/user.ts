@@ -7,14 +7,17 @@ export const useUserStore = defineStore(
   () => {
     const token = ref('');
     const username = ref('');
+    const role = ref<AuthResponse['role']>('user');
     const consentRequired = ref(false);
     const consentVersion = ref('');
 
     const isAuthed = computed(() => Boolean(token.value));
+    const isAdmin = computed(() => role.value === 'admin');
 
     function setAuth(payload: AuthResponse) {
       token.value = payload.token;
       username.value = payload.username;
+      role.value = payload.role ?? 'user';
       consentRequired.value = payload.consent_required;
       consentVersion.value = payload.consent_version;
     }
@@ -34,6 +37,7 @@ export const useUserStore = defineStore(
     function logout() {
       token.value = '';
       username.value = '';
+      role.value = 'user';
       consentRequired.value = false;
       consentVersion.value = '';
     }
@@ -41,9 +45,11 @@ export const useUserStore = defineStore(
     return {
       token,
       username,
+      role,
       consentRequired,
       consentVersion,
       isAuthed,
+      isAdmin,
       setAuth,
       setToken,
       requireConsent,

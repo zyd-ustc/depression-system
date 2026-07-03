@@ -9,6 +9,7 @@ RiskLevel = Literal["low", "medium", "high"]
 TopicStage = Literal["warmup", "planned"]
 SessionStatus = Literal["active", "ended"]
 StopReason = Literal["continue", "user_requested_end", "planned_topics_covered", "already_ended"]
+UserRole = Literal["user", "admin"]
 
 
 class LoginRequest(BaseModel):
@@ -19,6 +20,7 @@ class LoginRequest(BaseModel):
 class AuthResponse(BaseModel):
     token: str
     username: str
+    role: UserRole = "user"
     consent_required: bool
     consent_version: str
 
@@ -104,9 +106,47 @@ class ChatModelOutput(BaseModel):
     assistant_reply: str
 
 
+class SafetyNotice(BaseModel):
+    visible: bool = False
+    level: Literal["info", "caution", "urgent"] = "info"
+    title: str = ""
+    message: str = ""
+    actions: list[str] = Field(default_factory=list)
+
+
+class RagSource(BaseModel):
+    source: str | None = None
+    section: str | None = None
+    type: str | None = None
+    rank: int | None = None
+    char_count: int | None = None
+
+
+class RagContext(BaseModel):
+    enabled: bool = False
+    status: str = "bypassed"
+    query: str | None = None
+    total_chunks_returned: int = 0
+    total_chars: int = 0
+    max_chars_limit: int = 0
+    sources: list[RagSource] = Field(default_factory=list)
+    note: str = ""
+
+
+class ToneSkillState(BaseModel):
+    skill_id: str = "shuorenhua"
+    version: str = "1.9.1"
+    status: Literal["placeholder", "active", "disabled"] = "active"
+    profile: str = "chat/minimal/rewrite-safe"
+    rules: list[str] = Field(default_factory=list)
+
+
 class ChatResponse(BaseModel):
     conversation_id: int
     assistant_reply: str
+    safety_notice: SafetyNotice | None = None
+    rag_context: RagContext = Field(default_factory=RagContext)
+    tone_skill: ToneSkillState = Field(default_factory=ToneSkillState)
     risk: RiskAssessment
     next_topic_focus: NextTopicFocus
     topic_state: ConversationTopicState
@@ -149,3 +189,7 @@ class MonitorResponse(BaseModel):
     messages: list[ConversationMessage] = Field(default_factory=list)
     current_status: MonitorCurrentStatus
     topic_state: ConversationTopicState
+
+
+class AdminMonitorResponse(BaseModel):
+    conversations: list[MonitorResponse] = Field(default_factory=list)

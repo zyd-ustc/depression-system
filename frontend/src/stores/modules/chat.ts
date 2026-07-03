@@ -4,7 +4,10 @@ import type {
   DialogueStopDecision,
   MonitorResponse,
   NextTopicFocus,
+  RagContext,
   RiskAssessment,
+  SafetyNotice,
+  ToneSkillState,
 } from '@/api/types';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
@@ -22,6 +25,9 @@ export const useChatStore = defineStore('chat', () => {
   const nextTopic = ref<NextTopicFocus | null>(null);
   const topicState = ref<ConversationTopicState | null>(null);
   const stopDecision = ref<DialogueStopDecision | null>(null);
+  const safetyNotice = ref<SafetyNotice | null>(null);
+  const ragContext = ref<RagContext | null>(null);
+  const toneSkill = ref<ToneSkillState | null>(null);
   const modelBackend = ref<'deepseek' | 'fallback' | null>(null);
   const modelJsonValid = ref<boolean | null>(null);
   const conversationId = ref<number | null>(null);
@@ -34,6 +40,9 @@ export const useChatStore = defineStore('chat', () => {
     conversationId.value = response.conversation_id;
     append('assistant', response.assistant_reply);
     risk.value = response.risk;
+    safetyNotice.value = response.safety_notice;
+    ragContext.value = response.rag_context;
+    toneSkill.value = response.tone_skill;
     nextTopic.value = response.next_topic_focus;
     topicState.value = response.topic_state;
     stopDecision.value = response.stop_decision;
@@ -65,6 +74,9 @@ export const useChatStore = defineStore('chat', () => {
           prompt_instruction: '',
         }
       : null;
+    safetyNotice.value = null;
+    ragContext.value = null;
+    toneSkill.value = null;
     modelBackend.value = null;
     modelJsonValid.value = null;
   }
@@ -94,6 +106,9 @@ export const useChatStore = defineStore('chat', () => {
     nextTopic.value = null;
     topicState.value = null;
     stopDecision.value = null;
+    safetyNotice.value = null;
+    ragContext.value = null;
+    toneSkill.value = null;
     modelBackend.value = null;
     modelJsonValid.value = null;
   }
@@ -106,6 +121,9 @@ export const useChatStore = defineStore('chat', () => {
     nextTopic,
     topicState,
     stopDecision,
+    safetyNotice,
+    ragContext,
+    toneSkill,
     modelBackend,
     modelJsonValid,
     append,
