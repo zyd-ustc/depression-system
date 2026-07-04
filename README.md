@@ -1,100 +1,113 @@
-# Depression Dialogue System
+# 抑郁症辅助对话系统
 
-A full-stack pipeline for building and evaluating an AI-assisted depression support dialogue system. The project covers synthetic dialogue generation, depression-score distillation, SFT data preparation, model training (via LLaMA-Factory), local inference with a Gradio UI, and evaluation with a local benchmark. An optional RAG module augments responses with psychology literature and methodology.
+一个用于心理支持场景的 AI 对话系统。项目提供 Vue 3 前端、FastAPI 后端、用户认证、知情同意、结构化会话流程、风险提示、管理员监控和轻量级 RAG 知识检索。
 
-The repository also includes a P0 product demo for psychological dialogue assistance, risk judgment, persistent topic coverage, and natural session closure reports. See `docs/P0_IMPLEMENTATION_RECORD.md` for the current product implementation record.
+线上演示：[https://depression-system-eight.vercel.app](https://depression-system-eight.vercel.app)
 
-## Overview
+> 本项目仅用于心理健康辅助与技术演示，不能替代专业诊断、治疗或危机干预。如出现自伤、自杀或其他紧急风险，应立即联系当地急救服务、危机热线或线下专业人员。
 
-The system is designed to support research and development of conversational agents for mental health: it generates realistic doctor–patient multi-turn dialogues, assigns depression-related scores (and clinical-scale proxies) through a teacher–student distillation process, and uses those labels both for supervised fine-tuning and for evaluation. This keeps training and evaluation on a consistent scoring scheme while reducing reliance on expensive human annotations.
+## 主要功能
 
-**Main capabilities:**
+- **结构化多轮对话**：通过热身、主题推进和会话收束组织心理支持流程。
+- **风险识别**：识别对话中的风险信号，并给出安全边界提示。
+- **Mini RAG**：基于本地心理健康知识库检索相关内容，支持可选向量检索和重排序。
+- **用户系统**：支持注册、登录、签名 Token 和知情同意版本控制。
+- **会话持久化**：使用 SQLite 保存用户、会话、消息、主题状态和风险结果。
+- **监控面板**：展示会话状态、风险等级、热身进度和主题覆盖情况。
+- **研究管线**：保留合成对话、评分蒸馏、SFT 数据转换、训练配置和本地评测脚本。
 
-- **Synthetic dialogue generation** — LLM-based doctor and patient simulators produce multi-turn dialogues from patient profiles (e.g. card-based or PA-20), with configurable turn limits and model backends.
-- **Score distillation** — A teacher (e.g. DeepSeek API) plus a local student model produce depression scores, emotion dimensions, and scale-style outputs (PHQ-9, HAM-D, MADRS, QIDS) for each dialogue. Labels are written for downstream SFT and evaluation.
-- **SFT data pipeline** — Raw dialogues are converted into SFT-ready samples with embedded metadata (distilled scores, emotions, scales) so the model is trained with the same conceptual labels used at evaluation time.
-- **Training** — Configuration and dataset wiring for [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory); no framework code is bundled. You provide the base model and run training in your own LLaMA-Factory clone.
-- **Inference** — A Gradio-based UI for loading a fine-tuned model (or Hugging Face model ID) and conducting local multi-turn conversations.
-- **Evaluation** — A local benchmark (benchmark v2) with accuracy (e.g. MAE, RMSE, correlation, CCC), stability (test–retest, prompt paraphrase variance, ICC), and counterfactual consistency. Integration points for [MindEval](https://github.com/SWORDHealth/mind-eval) are documented for API-based evaluation.
-- **RAG (optional)** — Retrieval over psychology-related documents (theory, methodology, cases) to enrich model answers. Implemented in the `rag/` subtree with vector search and configurable data ingestion.
+## 技术栈
 
-## Architecture
+| 模块 | 技术 |
+| --- | --- |
+| 前端 | Vue 3, TypeScript, Vite, Pinia, Ant Design Vue |
+| 后端 | Python, FastAPI, Pydantic, SQLite |
+| LLM | DeepSeek API，本地 fallback 回复 |
+| RAG | SQLite FTS5, jieba, sentence-transformers / FAISS 可选 |
+| 部署 | Vercel Static + Python Serverless Function |
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Data synthesis (data/generate)                                         │
-│  Doctor + Patient simulators → multi-turn dialogues (e.g. dialogues.jsonl)│
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Score distillation (training/score_distill)                             │
-│  Teacher (e.g. DeepSeek) + student → distilled_scores.jsonl              │
-│  (depression_score, level, emotion_scores, scales: PHQ-9/HAM-D/…)        │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  SFT data (data/generate/data_convert.py)                                │
-│  Dialogues + distilled metadata → processed_dialogues.json              │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│  Training (LLaMA-Factory, config in training/)                          │
-│  SFT on base LLM → fine-tuned model / LoRA adapter                       │
-└────────────────────────────────┬────────────────────────────────────────┘
-                                 │
-          ┌──────────────────────┼──────────────────────┐
-          ▼                      ▼                      ▼
-┌─────────────────┐   ┌─────────────────┐   ┌─────────────────────────┐
-│  Inference UI    │   │  Benchmark v2    │   │  RAG (optional)          │
-│  (Gradio)        │   │  (local eval)    │   │  Psychology retrieval    │
-└─────────────────┘   └─────────────────┘   └─────────────────────────┘
+## 快速开始
+
+安装后端依赖：
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## Project Structure
-
-| Path | Description |
-|------|-------------|
-| `data/generate/` | Dialogue synthesis: `main.py` (doctor–patient generation), `data_convert.py` (to SFT + metadata), card/PA-20 inputs, prompts, and `processed/` outputs (e.g. `distilled_scores.jsonl`, `processed_dialogues.json`). |
-| `training/` | `score_distill/` (distillation script and student model), LLaMA-Factory config (`sft_config.yaml`, `dataset_info.json`). |
-| `src/inference_pipeline/` | Gradio app and launcher script for local inference. |
-| `eval/benchmark_v2/` | Local benchmark: dataset builder, sample/counterfactual generation, metrics (accuracy, stability, counterfactual), configs, and output schema. |
-| `eval/` | Top-level eval docs and pointers to MindEval. |
-| `rag/` | RAG pipeline: PDF/text ingestion, vector store, and retrieval for psychology content; see `rag/README.md`. |
-| `scripts/` | Unified workflow script that chains distillation → SFT conversion → benchmark dataset build → benchmark run. |
-| `src/product_app/` | FastAPI P0 product backend: auth, consent, chat, risk, topic state, stop logic, DeepSeek JSON client. |
-| `frontend/` | Vue 3 P0 product frontend. |
-| `api/` | Vercel Python function entrypoint for the product backend. |
-| `docs/` | Product plan, implementation record, and deployment notes. |
-
-## Dependencies and Integration
-
-- **Python**: 3.10+ recommended.
-- **Key libraries**: See `src/inference_pipeline/requirements_ui.txt` and `training/score_distill/requirements.txt`. RAG has its own `rag/requirements.txt`.
-- **External services**: Optional DeepSeek API key for the distillation teacher; without it, a heuristic teacher is used (lower quality). LLaMA-Factory and MindEval are used externally; this repo only provides configs and wiring.
-
-## References
-
-- [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory) — training framework used for SFT.
-- [MindEval](https://github.com/SWORDHealth/mind-eval) — multi-turn mental health support benchmark; see `eval/README.md` for how to plug in this project’s model.
-
-For step-by-step setup, environment variables, and one-shot script usage, see the docs in `training/README.md`, `eval/README.md`, `eval/benchmark_v2/README.md`, and `scripts/run_unified_workflow.sh`.
-
-## P0 Product Demo
-
-Local development:
+启动后端：
 
 ```bash
 PYTHONPATH=src python -m uvicorn product_app.main:app --host 127.0.0.1 --port 8000
+```
+
+启动前端：
+
+```bash
+npm --prefix frontend install
 npm --prefix frontend run dev -- --host 127.0.0.1 --port 5173
 ```
 
-DeepSeek API is optional for local startup. Without `DEEPSEEK_API_KEY`, the app uses fallback replies and the frontend status panel shows `fallback`.
+没有 `DEEPSEEK_API_KEY` 时，系统会使用 fallback 回复，便于本地开发和演示。
 
-Deployment details:
+## 常用配置
 
-- `docs/P0_PRODUCT_PLAN.md`
-- `docs/P0_IMPLEMENTATION_RECORD.md`
-- `docs/DEPLOYMENT.md`
+| 变量 | 说明 |
+| --- | --- |
+| `APP_SECRET` | Token 签名密钥，生产环境必须修改 |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | 管理员账号 |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key |
+| `DEEPSEEK_MODEL` | DeepSeek 模型名 |
+| `PRODUCT_DATABASE_URL` / `PRODUCT_DB_PATH` | 数据库地址 |
+| `MINI_RAG_ENABLED` | 是否启用 Mini RAG |
+| `MINI_RAG_ENABLE_EMBEDDING` / `MINI_RAG_ENABLE_RERANK` | 是否启用语义检索和重排序 |
+
+## RAG 知识库
+
+知识源位于 `data/knowledge/`，默认索引为 `data/knowledge_index.db`。
+
+```bash
+python scripts/build_knowledge_index.py --rebuild
+```
+
+启用可选向量检索：
+
+```bash
+pip install -r src/product_app/requirements-rag.txt
+python scripts/build_knowledge_index.py --rebuild --enable-embedding --vector-store auto
+```
+
+知识库规范见 `data/knowledge/README.md`。
+
+## 部署
+
+项目已包含 Vercel 配置：
+
+- `frontend/` 构建为静态资源；
+- `api/index.py` 暴露 FastAPI Serverless Function；
+- `/api/*` 请求转发到后端，其余请求回退到前端路由。
+
+部署前至少修改 `APP_SECRET` 和 `ADMIN_PASSWORD`。更多说明见 `docs/DEPLOYMENT.md`。
+
+## 目录
+
+| 路径 | 说明 |
+| --- | --- |
+| `frontend/` | Vue 3 产品前端 |
+| `src/product_app/` | FastAPI 产品后端 |
+| `api/` | Vercel 后端入口 |
+| `data/knowledge/` | Mini RAG 知识源 |
+| `data/generate/` | 合成对话与 SFT 数据转换 |
+| `training/` | 评分蒸馏与 LLaMA-Factory 配置 |
+| `eval/` | 本地 benchmark 与评测说明 |
+| `docs/` | 产品计划、实现记录和部署文档 |
+
+## 训练与评估
+
+研究侧流程包括合成对话生成、评分蒸馏、SFT 数据准备、LLaMA-Factory 训练配置和 benchmark v2 评测。可从 `scripts/run_unified_workflow.sh`、`training/README.md` 和 `eval/README.md` 开始。
+
+## 参考
+
+- [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory)
+- [MindEval](https://github.com/SWORDHealth/mind-eval)
