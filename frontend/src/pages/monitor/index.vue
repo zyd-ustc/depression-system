@@ -47,7 +47,15 @@ const ragSources = computed(() => {
   if (!sources.length) return '-';
   return sources
     .slice(0, 4)
-    .map(item => [item.rank ? `#${item.rank}` : '', item.section || item.source || 'source'].filter(Boolean).join(' '))
+    .map(item =>
+      [
+        item.rank ? `#${item.rank}` : '',
+        item.section || item.source || 'source',
+        item.retrieval_backend ? `[${item.retrieval_backend}]` : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    )
     .join(' / ');
 });
 const toneSkill = computed(() => {

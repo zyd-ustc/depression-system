@@ -1,0 +1,6 @@
+-r requirements.txt
+
+numpy>=1.26.0
+sentence-transformers>=3.0.0
+faiss-cpu>=1.8.0
+jieba>=0.42.1

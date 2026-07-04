@@ -154,6 +154,14 @@ DeepSeek 使用 OpenAI-compatible API：
 - `rag_context` 返回检索状态、query、片段数量和来源摘要，前端单独展示；
 - `tone_skill` 当前接入 `shuorenhua@1.9.1`，来源为 `refs/shuorenhua`，按 chat/minimal 规则清理模板感、姿态层、过度接住和心理判断腔。
 
+MiniRAG 检索增强：
+
+- 默认仍使用 `data/knowledge_index.db` 的 SQLite FTS5 词法检索；
+- `MINI_RAG_ENABLE_EMBEDDING=1` 时，会加载 `data/knowledge_vectors.npz`，优先使用 `data/knowledge_vectors.faiss`，没有 FAISS 时回退到 NumPy 向量搜索；
+- 默认 embedding 模型为 `BAAI/bge-small-zh-v1.5`，可通过 `MINI_RAG_EMBEDDING_MODEL` 覆盖；
+- `MINI_RAG_ENABLE_RERANK=1` 时，会尝试使用 `sentence-transformers` `CrossEncoder` 和 `BAAI/bge-reranker-base` 重排序；依赖或模型不可用时回退到确定性的多因素重排序；
+- 向量索引由 `python scripts/build_knowledge_index.py --rebuild --enable-embedding --vector-store auto` 生成；可选依赖记录在 `src/product_app/requirements-rag.txt`。
+
 预热总结轮：
 
 - `next_topic_focus.topic` 为“预热总结与话题计划”；

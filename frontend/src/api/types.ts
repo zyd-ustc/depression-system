@@ -92,6 +92,8 @@ export interface RagSource {
   type: string | null;
   rank: number | null;
   char_count: number | null;
+  score: number | null;
+  retrieval_backend: string | null;
 }
 
 export interface RagContext {

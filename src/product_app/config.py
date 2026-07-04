@@ -16,6 +16,10 @@ def _env_bool(name: str, default: str = "0") -> bool:
     return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _env_float(name: str, default: str) -> float:
+    return float(os.getenv(name, default))
+
+
 class ProductSettings:
     """Environment-backed settings for the P0 product app."""
 
@@ -40,6 +44,19 @@ class ProductSettings:
     MINI_RAG_MAX_CHARS = int(os.getenv("MINI_RAG_MAX_CHARS", "2400"))
     MINI_RAG_ENABLE_EMBEDDING = _env_bool("MINI_RAG_ENABLE_EMBEDDING", "0")
     MINI_RAG_ENABLE_RERANK = _env_bool("MINI_RAG_ENABLE_RERANK", "0")
+    MINI_RAG_VECTOR_INDEX_PATH = os.getenv(
+        "MINI_RAG_VECTOR_INDEX_PATH",
+        str(ROOT_DIR / "data" / "knowledge_vectors.npz"),
+    )
+    MINI_RAG_FAISS_INDEX_PATH = os.getenv(
+        "MINI_RAG_FAISS_INDEX_PATH",
+        str(ROOT_DIR / "data" / "knowledge_vectors.faiss"),
+    )
+    MINI_RAG_EMBEDDING_MODEL = os.getenv("MINI_RAG_EMBEDDING_MODEL", "BAAI/bge-small-zh-v1.5")
+    MINI_RAG_RERANK_MODEL = os.getenv("MINI_RAG_RERANK_MODEL", "BAAI/bge-reranker-base")
+    MINI_RAG_EMBEDDING_CANDIDATE_LIMIT = int(os.getenv("MINI_RAG_EMBEDDING_CANDIDATE_LIMIT", "30"))
+    MINI_RAG_EMBEDDING_WEIGHT = _env_float("MINI_RAG_EMBEDDING_WEIGHT", "0.65")
+    MINI_RAG_RERANK_WEIGHT = _env_float("MINI_RAG_RERANK_WEIGHT", "0.75")
 
 
 settings = ProductSettings()

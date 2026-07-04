@@ -404,6 +404,8 @@ def _compact_rag_result(rag_result: dict | None) -> RagContext:
                 type=chunk.get("type"),
                 rank=chunk.get("rank"),
                 char_count=chunk.get("char_count"),
+                score=chunk.get("score"),
+                retrieval_backend=chunk.get("retrieval_backend"),
             )
             for chunk in rag_result.get("retrieved_chunks", [])
         ],

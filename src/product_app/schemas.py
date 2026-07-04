@@ -120,6 +120,8 @@ class RagSource(BaseModel):
     type: str | None = None
     rank: int | None = None
     char_count: int | None = None
+    score: float | None = None
+    retrieval_backend: str | None = None
 
 
 class RagContext(BaseModel):
