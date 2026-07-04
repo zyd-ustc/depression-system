@@ -31,6 +31,31 @@ const warmupPercent = computed(() => {
 });
 const patientInfo = computed<PatientPreliminaryInfo | null>(() => monitor.value?.patient_preliminary_info ?? null);
 const symptomJudgment = computed<SymptomJudgment | null>(() => monitor.value?.symptom_judgment ?? null);
+const technical = computed(() => monitor.value?.technical_state ?? null);
+const modelStatus = computed(() => {
+  const state = technical.value;
+  if (!state?.model_backend) return '-';
+  return `${state.model_backend}${state.model_json_valid === false ? ' / json-failed' : ''}`;
+});
+const ragStatus = computed(() => {
+  const rag = technical.value?.rag_context;
+  if (!rag) return '-';
+  return `${rag.status} / ${rag.total_chunks_returned}`;
+});
+const ragSources = computed(() => {
+  const sources = technical.value?.rag_context.sources ?? [];
+  if (!sources.length) return '-';
+  return sources
+    .slice(0, 4)
+    .map(item => [item.rank ? `#${item.rank}` : '', item.section || item.source || 'source'].filter(Boolean).join(' '))
+    .join(' / ');
+});
+const toneSkill = computed(() => {
+  const skill = technical.value?.tone_skill;
+  if (!skill) return '-';
+  return `${skill.skill_id}@${skill.version} / ${skill.status}`;
+});
+const safetyNotice = computed(() => technical.value?.safety_notice ?? null);
 
 function asText(items?: string[]) {
   return items?.length ? items.join(' / ') : '-';
@@ -255,6 +280,10 @@ function selectMonitor(item: MonitorResponse) {
           <dd>{{ asText(monitor?.current_status.remaining_topics) }}</dd>
           <dt>观察主题</dt>
           <dd>{{ asText(monitor?.current_status.observed_topics) }}</dd>
+          <dt>已覆盖</dt>
+          <dd>{{ asText(monitor?.topic_state.covered_topics) }}</dd>
+          <dt>计划话题</dt>
+          <dd>{{ asText(monitor?.topic_state.planned_topics) }}</dd>
           <dt>停止原因</dt>
           <dd>{{ monitor?.current_status.stop_reason || '-' }}</dd>
           <dt>更新时间</dt>
@@ -266,6 +295,14 @@ function selectMonitor(item: MonitorResponse) {
           <p><b>假设</b>{{ asText(symptomJudgment?.possible_patterns) }}</p>
           <p><b>风险</b>{{ asText(symptomJudgment?.risk_flags) }}</p>
           <p><b>边界</b>{{ symptomJudgment?.boundary_note || '-' }}</p>
+        </div>
+        <div class="symptom-box technical-box">
+          <h2>运行状态</h2>
+          <p><b>模型</b>{{ modelStatus }}</p>
+          <p><b>语气</b>{{ toneSkill }}</p>
+          <p><b>RAG</b>{{ ragStatus }}</p>
+          <p><b>来源</b>{{ ragSources }}</p>
+          <p v-if="safetyNotice"><b>提示</b>{{ safetyNotice.title }} / {{ safetyNotice.level }}</p>
         </div>
         <p v-if="lastError" class="monitor-error">{{ lastError }}</p>
       </section>

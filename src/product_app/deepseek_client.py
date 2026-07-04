@@ -59,7 +59,7 @@ def _fallback_reply(
     elif risk.level == "high":
         reply = high_risk_reply()
     elif next_topic_focus is not None and next_topic_focus.topic == WARMUP_SUMMARY_TOPIC and topic_state is not None:
-        reply = _fallback_warmup_summary_reply(topic_state)
+        reply = _fallback_warmup_transition_reply(topic_state)
     elif risk.level == "medium":
         reply = (
             "先别急着把所有事讲清楚。挑最近最压着你的一个片段就行："
@@ -133,25 +133,15 @@ def _fallback_stop_reply(
     )
 
 
-def _fallback_warmup_summary_reply(topic_state: ConversationTopicState) -> str:
-    result = topic_state.warmup_result
-    info = result.patient_preliminary_info
-    judgment = result.symptom_judgment
-    topic_text = "、".join(result.topic_list or topic_state.planned_topics) or "情绪状态、睡眠、功能影响和支持系统"
-    context_text = "；".join(info.stated_context) if info.stated_context else "已完成预热信息收集"
-    concern_text = "、".join(info.main_concerns) if info.main_concerns else topic_text
-    impact_text = "、".join(info.functional_impacts) if info.functional_impacts else "功能影响仍需继续观察"
-    support_text = "、".join(info.support_context) if info.support_context else "现实支持资源尚未充分明确"
-    symptom_text = "、".join(judgment.observed_symptoms) if judgment.observed_symptoms else "症状线索仍需继续澄清"
-    pattern_text = "、".join(judgment.possible_patterns) if judgment.possible_patterns else "目前以探索主要压力源为主"
-    return (
-        "预热已完成。以下是本次咨询的初步工作框架：\n\n"
-        f"一、拟覆盖话题：{topic_text}。\n\n"
-        f"二、患者初步信息：{context_text}。当前主要困扰可先概括为：{concern_text}；"
-        f"已看到的影响包括：{impact_text}；支持资源方面：{support_text}。\n\n"
-        f"三、症状判断：目前观察到的线索包括{symptom_text}。初步工作假设是：{pattern_text}。"
-        "这些内容会作为后续对话的工作线索。\n\n"
-        "四、下一步：下一轮开始，我会从计划里的第一个未覆盖话题继续推进。"
+def _fallback_warmup_transition_reply(topic_state: ConversationTopicState) -> str:
+    planned = topic_state.warmup_result.topic_list or topic_state.planned_topics
+    next_topic = planned[0] if planned else "最近最困扰的一件具体事"
+    return _fallback_topic_reply(
+        NextTopicFocus(
+            topic=next_topic,
+            objective="预热结束后进入第一个计划话题。",
+            prompt_instruction="不要展示后台分析，直接围绕第一个计划话题自然追问一个问题。",
+        )
     )
 
 

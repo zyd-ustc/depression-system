@@ -162,6 +162,14 @@ class ConversationMessage(BaseModel):
     created_at: str
 
 
+class DialogueTechnicalState(BaseModel):
+    model_backend: Literal["deepseek", "fallback"] | None = None
+    model_json_valid: bool | None = None
+    rag_context: RagContext = Field(default_factory=RagContext)
+    tone_skill: ToneSkillState = Field(default_factory=ToneSkillState)
+    safety_notice: SafetyNotice | None = None
+
+
 class MonitorWarmupState(BaseModel):
     stage: TopicStage
     warmup_turns: int
@@ -188,6 +196,7 @@ class MonitorResponse(BaseModel):
     symptom_judgment: SymptomJudgment
     messages: list[ConversationMessage] = Field(default_factory=list)
     current_status: MonitorCurrentStatus
+    technical_state: DialogueTechnicalState = Field(default_factory=DialogueTechnicalState)
     topic_state: ConversationTopicState
 
 

@@ -134,6 +134,14 @@ export interface ConversationMessage {
   created_at: string;
 }
 
+export interface DialogueTechnicalState {
+  model_backend: 'deepseek' | 'fallback' | null;
+  model_json_valid: boolean | null;
+  rag_context: RagContext;
+  tone_skill: ToneSkillState;
+  safety_notice: SafetyNotice | null;
+}
+
 export interface MonitorWarmupState {
   stage: 'warmup' | 'planned';
   warmup_turns: number;
@@ -160,6 +168,7 @@ export interface MonitorResponse {
   symptom_judgment: SymptomJudgment;
   messages: ConversationMessage[];
   current_status: MonitorCurrentStatus;
+  technical_state: DialogueTechnicalState;
   topic_state: ConversationTopicState;
 }
 

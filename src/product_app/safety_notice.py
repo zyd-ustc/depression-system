@@ -33,7 +33,7 @@ def build_safety_notice(
             actions=["记录睡眠、情绪和功能变化", "考虑预约线下专业评估"],
         )
 
-    if stop_decision.report_required or topic_state.warmup_completed or next_topic_focus.topic == "预热总结与话题计划":
+    if stop_decision.report_required or stop_decision.should_stop or next_topic_focus.topic == "预热总结与话题计划":
         return SafetyNotice(
             visible=True,
             level="info",

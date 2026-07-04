@@ -40,10 +40,10 @@ WARMUP_SEQUENCE: list[NextTopicFocus] = [
 
 WARMUP_SUMMARY_FOCUS = NextTopicFocus(
     topic="预热总结与话题计划",
-    objective="强制结束预热，输出本次咨询的话题列表、患者初步信息和症状判断。",
+    objective="强制结束预热，在后台生成本次咨询的话题列表、患者初步信息和症状判断。",
     prompt_instruction=(
-        "预热已经达到5轮，必须结束预热。不要继续收集预热信息，不要追问新问题。"
-        "用用户可读的方式输出：本次后续拟覆盖的话题列表、患者初步信息、症状判断和边界说明。"
+        "预热已经达到5轮，必须结束预热。该话题只用于后台状态转场和监控记录，"
+        "不要作为用户可见回复输出。"
     ),
 )
 
@@ -119,8 +119,9 @@ def advance_topic_state(
         state.warmup_turns = min(state.warmup_turns + 1, WARMUP_MAX_TURNS)
         if state.warmup_turns >= WARMUP_MAX_TURNS:
             _complete_warmup(state, risk, source_text, patient_id)
-            state.current_topic = WARMUP_SUMMARY_FOCUS.topic
-            return state, WARMUP_SUMMARY_FOCUS
+            next_topic = _next_uncovered_topic(state)
+            state.current_topic = next_topic.topic
+            return state, next_topic
         return _choose_warmup_focus(state)
 
     if not state.planned_topics:
@@ -164,19 +165,20 @@ def _build_warmup_result(
     patient_id: str,
 ) -> WarmupResult:
     topic_list = state.planned_topics or _build_topic_plan(state)
+    observed_topics = _merge_unique(state.observed_topics, risk.covered_topics)
     info = PatientPreliminaryInfo(
         patient_id=patient_id,
         stated_context=_context_lines(state, source_text),
-        main_concerns=_main_concerns(topic_list),
-        functional_impacts=_functional_impacts(topic_list, source_text),
+        main_concerns=_main_concerns(observed_topics, source_text),
+        functional_impacts=_functional_impacts(observed_topics, source_text),
         support_context=_support_context(source_text),
         unknowns=["年龄", "性别", "既往诊疗史", "用药史", "正式量表结果"],
     )
     judgment = SymptomJudgment(
         risk_level=risk.level,
         risk_score=risk.score,
-        observed_symptoms=_observed_symptoms(topic_list),
-        possible_patterns=_possible_patterns(topic_list),
+        observed_symptoms=_observed_symptoms(observed_topics),
+        possible_patterns=_possible_patterns(observed_topics),
         risk_flags=_risk_flags(risk),
         boundary_note="仅为5轮预热后的辅助性初筛观察，不构成诊断；如症状持续、加重或出现安全风险，应转介专业评估。",
     )
@@ -190,60 +192,84 @@ def _build_warmup_result(
 
 
 def _context_lines(state: ConversationTopicState, source_text: str) -> list[str]:
-    lines = [f"已完成{state.warmup_turns}轮预热对话。"]
+    lines: list[str] = []
+    for item in _source_lines(source_text)[:4]:
+        lines.append("用户自述：" + _truncate(item, 90))
     if state.observed_topics:
-        lines.append("用户主动呈现的主题包括：" + "、".join(state.observed_topics[:6]) + "。")
-    if _contains_any(source_text, ["家人", "妈妈", "母亲", "父母"]):
+        lines.append("已观察主题：" + "、".join(state.observed_topics[:6]))
+    if _contains_any(source_text, ["家人", "家里人", "妈妈", "母亲", "父母"]):
         lines.append("对话中出现家庭互动或亲子关系线索。")
-    return lines
+    return lines or [f"已完成{state.warmup_turns}轮预热，但用户自述信息仍不足，需要在计划阶段继续澄清。"]
 
 
-def _main_concerns(topic_list: list[str]) -> list[str]:
-    return topic_list[:6] if topic_list else ["当前困扰仍需在计划阶段继续澄清"]
+def _main_concerns(observed_topics: list[str], source_text: str) -> list[str]:
+    concerns: list[str] = []
+    for topic in observed_topics:
+        if topic in {"情绪低落", "兴趣减退", "睡眠", "精力疲劳", "注意力", "自责无价值", "焦虑紧张", "学习工作", "人际关系"}:
+            concerns.append(topic)
+    if not concerns and _source_lines(source_text):
+        concerns.append("用户已表达主观困扰，但具体主题仍需继续澄清")
+    return concerns[:6] or ["当前困扰仍需在计划阶段继续澄清"]
 
 
-def _functional_impacts(topic_list: list[str], source_text: str) -> list[str]:
+def _functional_impacts(observed_topics: list[str], source_text: str) -> list[str]:
     impacts: list[str] = []
-    if "睡眠" in topic_list or _contains_any(source_text, ["睡不着", "失眠", "早醒", "整宿"]):
+    if "睡眠" in observed_topics or _contains_any(source_text, ["睡不着", "失眠", "早醒", "整宿", "睡不好"]):
         impacts.append("睡眠质量或恢复感可能受影响")
-    if "学习工作" in topic_list or _contains_any(source_text, ["工作", "学习", "上班", "任务"]):
+    if "学习工作" in observed_topics or _contains_any(source_text, ["工作", "学习", "上班", "任务"]):
         impacts.append("学习或工作功能可能受影响")
-    if "精力疲劳" in topic_list or _contains_any(source_text, ["很累", "没力气", "疲惫"]):
+    if "精力疲劳" in observed_topics or _contains_any(source_text, ["很累", "没力气", "疲惫", "起床"]):
         impacts.append("精力和日常启动能力可能受影响")
-    if "注意力" in topic_list or _contains_any(source_text, ["反应", "注意力", "迟钝"]):
+    if "注意力" in observed_topics or _contains_any(source_text, ["反应", "注意力", "迟钝"]):
         impacts.append("注意力、反应速度或任务维持可能受影响")
     return impacts or ["功能影响仍需继续观察"]
 
 
 def _support_context(source_text: str) -> list[str]:
     support: list[str] = []
-    if _contains_any(source_text, ["家人", "妈妈", "母亲", "父母"]):
+    if _contains_any(source_text, ["家人", "家里人", "妈妈", "母亲", "父母"]):
         support.append("家庭成员是当前叙事中的重要关系线索")
     if _contains_any(source_text, ["朋友", "同学", "同事", "伴侣"]):
         support.append("对话中出现同伴或社会关系线索")
     return support or ["现实支持资源尚未充分明确"]
 
 
-def _observed_symptoms(topic_list: list[str]) -> list[str]:
+def _observed_symptoms(observed_topics: list[str]) -> list[str]:
     symptom_topics = [
         topic
-        for topic in topic_list
+        for topic in observed_topics
         if topic in {"情绪低落", "兴趣减退", "睡眠", "精力疲劳", "饮食体重", "注意力", "自责无价值", "焦虑紧张"}
     ]
     return symptom_topics or ["症状线索不足，需继续澄清"]
 
 
-def _possible_patterns(topic_list: list[str]) -> list[str]:
+def _possible_patterns(observed_topics: list[str]) -> list[str]:
+    topic_set = set(observed_topics)
     patterns: list[str] = []
-    if {"情绪低落", "兴趣减退"} & set(topic_list):
+    if {"情绪低落", "兴趣减退"} & topic_set:
         patterns.append("低落情绪与动力下降可能是后续重点")
-    if {"睡眠", "精力疲劳", "注意力"} & set(topic_list):
+    if {"睡眠", "精力疲劳", "注意力"} & topic_set:
         patterns.append("睡眠、精力和认知效率可能相互影响")
-    if {"自责无价值", "人际关系"} & set(topic_list):
+    if {"自责无价值", "人际关系"} & topic_set:
         patterns.append("负性自我评价可能与关系压力相互强化")
-    if "焦虑紧张" in topic_list:
+    if "焦虑紧张" in topic_set:
         patterns.append("焦虑或躯体紧张需要进一步区分触发场景")
     return patterns or ["目前以探索主要压力源和功能影响为主"]
+
+
+def _source_lines(source_text: str) -> list[str]:
+    lines = []
+    for raw in source_text.splitlines():
+        line = " ".join(raw.strip().split())
+        if line:
+            lines.append(line)
+    return lines
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."
 
 
 def _risk_flags(risk: RiskAssessment) -> list[str]:

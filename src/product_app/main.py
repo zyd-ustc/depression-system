@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -18,6 +19,7 @@ from product_app.schemas import (
     ChatResponse,
     ConsentRequest,
     ConsentResponse,
+    DialogueTechnicalState,
     LoginRequest,
     MonitorCurrentStatus,
     MonitorResponse,
@@ -225,7 +227,7 @@ def _conversation_messages(conversation_id: int, limit: int | None = None) -> li
     with get_conn() as conn:
         rows = conn.execute(
             f"""
-            SELECT role, content, risk_level, created_at FROM messages
+            SELECT role, content, risk_level, created_at, metadata_json FROM messages
             WHERE conversation_id = ?
             ORDER BY id DESC {limit_clause}
             """,
@@ -303,6 +305,7 @@ def _build_monitor_response(username: str, conversation: dict | None) -> Monitor
     conversation_id = int(conversation["id"])
     topic_state = parse_topic_state(conversation.get("topic_state"))
     messages = _conversation_messages(conversation_id)
+    technical_state = _latest_technical_state(messages)
     risk_text = "\n".join([item["content"] for item in messages if item.get("role") == "user"])
     risk = assess_risk(risk_text)
     covered = set(topic_state.covered_topics)
@@ -331,8 +334,31 @@ def _build_monitor_response(username: str, conversation: dict | None) -> Monitor
             observed_topics=topic_state.observed_topics,
             updated_at=conversation.get("updated_at"),
         ),
+        technical_state=technical_state,
         topic_state=topic_state,
     )
+
+
+def _latest_technical_state(messages: list[dict]) -> DialogueTechnicalState:
+    for item in reversed(messages):
+        if item.get("role") != "assistant":
+            continue
+        raw = item.get("metadata_json")
+        if not raw:
+            continue
+        try:
+            payload = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        try:
+            if hasattr(DialogueTechnicalState, "model_validate"):
+                return DialogueTechnicalState.model_validate(payload)
+            return DialogueTechnicalState.parse_obj(payload)
+        except Exception:
+            continue
+    return DialogueTechnicalState()
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -381,6 +407,13 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
     )
     model_output = generation.output
     safety_notice = build_safety_notice(risk, next_topic_focus, topic_state, stop_decision)
+    technical_state = DialogueTechnicalState(
+        model_backend=model_backend,
+        model_json_valid=generation.json_valid,
+        rag_context=generation.rag_context,
+        tone_skill=generation.tone_skill,
+        safety_notice=safety_notice,
+    )
 
     with get_conn() as conn:
         now = utc_now()
@@ -389,8 +422,18 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
             (conversation_id, "user", message, risk.level, now),
         )
         conn.execute(
-            "INSERT INTO messages(conversation_id, role, content, risk_level, created_at) VALUES (?, ?, ?, ?, ?)",
-            (conversation_id, "assistant", model_output.assistant_reply, risk.level, now),
+            """
+            INSERT INTO messages(conversation_id, role, content, risk_level, created_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                conversation_id,
+                "assistant",
+                model_output.assistant_reply,
+                risk.level,
+                now,
+                json.dumps(_schema_dict(technical_state), ensure_ascii=False),
+            ),
         )
         conn.execute(
             "UPDATE conversations SET updated_at = ?, topic_state = ? WHERE id = ?",
@@ -410,6 +453,14 @@ def chat(payload: ChatRequest, user: dict = Depends(_current_user)) -> ChatRespo
         model_backend=model_backend,
         model_json_valid=generation.json_valid,
     )
+
+
+def _schema_dict(value) -> dict:
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return dict(value)
 
 
 @app.get("/api/conversations/latest", response_model=MonitorResponse)
