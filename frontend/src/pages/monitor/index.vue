@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { MonitorResponse, PatientPreliminaryInfo, SymptomJudgment } from '@/api/types';
-import { ChatLineRound, Refresh } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { MessageOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { me } from '@/api/auth';
@@ -77,7 +77,7 @@ async function verifyAuth() {
     const payload = await me();
     userStore.setAuth(payload);
     if (payload.role !== 'admin') {
-      ElMessage.error('后台监控仅管理员可见');
+      message.error('后台监控仅管理员可见');
       await router.push('/');
       return false;
     }
@@ -101,12 +101,12 @@ async function loadMonitor(showToast = false) {
       selectedConversationId.value = monitorList.value[0]?.conversation_id ?? null;
     }
     lastError.value = '';
-    if (showToast) ElMessage.success('监控已刷新');
+    if (showToast) message.success('监控已刷新');
   }
   catch (error) {
     const text = error instanceof Error ? error.message : '监控刷新失败';
     lastError.value = text;
-    if (showToast) ElMessage.error(text);
+    if (showToast) message.error(text);
   }
   finally {
     loading.value = false;
@@ -139,7 +139,7 @@ watch(
       return;
     }
     if (!isAdmin) {
-      ElMessage.error('后台监控仅管理员可见');
+      message.error('后台监控仅管理员可见');
       await router.push('/');
       return;
     }
@@ -154,35 +154,37 @@ function selectMonitor(item: MonitorResponse) {
 </script>
 
 <template>
+  <a href="#monitor-content" class="skip-link">跳到监控内容</a>
   <main class="product-shell monitor-shell">
-    <section class="topbar">
+    <header class="topbar">
       <div class="brand-block">
-        <span class="system-index">P0 / MONITOR</span>
+        <span class="system-index">P0 / SAFETY MONITOR</span>
         <h1>后台监控</h1>
+        <p>管理员用于观察会话状态、风险线索和运行质量</p>
       </div>
-      <div class="top-actions monitor-actions">
+      <nav class="top-actions monitor-actions" aria-label="后台操作">
         <span class="user-chip">{{ userLabel }}</span>
         <div class="button-stack">
-          <el-button @click="router.push('/')">
-            <el-icon>
-              <ChatLineRound />
-            </el-icon>
+          <a-button @click="router.push('/')">
+            <template #icon>
+              <MessageOutlined />
+            </template>
             对话
-          </el-button>
-          <el-button :loading="loading" @click="loadMonitor(true)">
-            <el-icon>
-              <Refresh />
-            </el-icon>
+          </a-button>
+          <a-button :loading="loading" @click="loadMonitor(true)">
+            <template #icon>
+              <ReloadOutlined />
+            </template>
             刷新
-          </el-button>
+          </a-button>
         </div>
-      </div>
-    </section>
+      </nav>
+    </header>
 
-    <section class="monitor-grid">
-      <section class="monitor-panel user-list-panel">
+    <section id="monitor-content" class="monitor-grid" aria-label="后台监控工作区" :aria-busy="loading">
+      <section class="monitor-panel user-list-panel" aria-labelledby="users-panel-title">
         <header>
-          <span>USERS</span>
+          <h2 id="users-panel-title">会话列表</h2>
           <strong>{{ monitorList.length }} 会话</strong>
         </header>
         <div class="monitor-user-list">
@@ -191,6 +193,8 @@ function selectMonitor(item: MonitorResponse) {
             :key="item.conversation_id ?? `${item.username}-empty`"
             type="button"
             :class="{ 'is-active': item.conversation_id === monitor?.conversation_id }"
+            :aria-current="item.conversation_id === monitor?.conversation_id ? 'true' : undefined"
+            :aria-label="`查看 ${item.username} 的会话 ${item.conversation_id ?? '未编号'}`"
             @click="selectMonitor(item)"
           >
             <span>{{ item.username }}</span>
@@ -200,12 +204,19 @@ function selectMonitor(item: MonitorResponse) {
         </div>
       </section>
 
-      <section class="monitor-panel warmup-panel">
+      <section class="monitor-panel warmup-panel" aria-labelledby="warmup-panel-title">
         <header>
-          <span>WARMUP</span>
-          <strong>{{ monitor?.warmup.completed ? '已结束' : '进行中' }}</strong>
+          <h2 id="warmup-panel-title">预热进度</h2>
+          <strong>{{ monitor ? (monitor.warmup.completed ? '已结束' : '进行中') : '-' }}</strong>
         </header>
-        <div class="warmup-meter">
+        <div
+          class="warmup-meter"
+          role="progressbar"
+          :aria-valuenow="warmupPercent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-label="预热完成进度"
+        >
           <div class="warmup-meter-fill" :style="{ width: `${warmupPercent}%` }" />
         </div>
         <dl class="monitor-kv">
@@ -218,12 +229,13 @@ function selectMonitor(item: MonitorResponse) {
         </dl>
       </section>
 
-      <section class="monitor-panel patient-panel">
+      <section class="monitor-panel patient-panel" aria-labelledby="patient-panel-title">
         <header>
-          <span>PATIENT</span>
+          <h2 id="patient-panel-title">患者线索</h2>
           <strong>{{ patientInfo?.patient_id || '-' }}</strong>
         </header>
         <table class="patient-table">
+          <caption class="sr-only">患者初步背景、主要困扰、功能影响和待补信息</caption>
           <tbody>
             <tr>
               <th>初步背景</th>
@@ -249,12 +261,12 @@ function selectMonitor(item: MonitorResponse) {
         </table>
       </section>
 
-      <section class="monitor-panel history-panel">
+      <section class="monitor-panel history-panel" aria-labelledby="history-panel-title">
         <header>
-          <span>HISTORY</span>
+          <h2 id="history-panel-title">对话记录</h2>
           <strong>{{ monitor?.messages.length ?? 0 }} 条</strong>
         </header>
-        <div class="monitor-history">
+        <div class="monitor-history" role="log" aria-live="polite" aria-relevant="additions text" tabindex="0">
           <article v-for="(message, index) in monitor?.messages ?? []" :key="`${message.created_at}-${index}`">
             <div>
               <span>{{ message.role === 'user' ? '用户' : '系统' }}</span>
@@ -266,9 +278,9 @@ function selectMonitor(item: MonitorResponse) {
         </div>
       </section>
 
-      <section class="monitor-panel status-panel">
+      <section class="monitor-panel status-panel" aria-labelledby="status-panel-title">
         <header>
-          <span>STATUS</span>
+          <h2 id="status-panel-title">状态汇总</h2>
           <strong>{{ monitor?.current_status.session_status || '-' }}</strong>
         </header>
         <dl class="monitor-kv">
@@ -304,7 +316,7 @@ function selectMonitor(item: MonitorResponse) {
           <p><b>来源</b>{{ ragSources }}</p>
           <p v-if="safetyNotice"><b>提示</b>{{ safetyNotice.title }} / {{ safetyNotice.level }}</p>
         </div>
-        <p v-if="lastError" class="monitor-error">{{ lastError }}</p>
+        <p v-if="lastError" class="monitor-error" role="alert">{{ lastError }}</p>
       </section>
     </section>
 

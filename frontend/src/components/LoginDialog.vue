@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { message } from 'ant-design-vue';
 import { computed, reactive, ref } from 'vue';
 import { login, register } from '@/api/auth';
 import { useUserStore } from '@/stores';
@@ -28,11 +28,11 @@ const userStore = useUserStore();
 async function submit() {
   const username = form.username.trim();
   if (username.length < 2) {
-    ElMessage.warning('用户名至少 2 个字符');
+    message.warning('用户名至少 2 个字符');
     return;
   }
   if (form.password.length < 6) {
-    ElMessage.warning('密码至少 6 位');
+    message.warning('密码至少 6 位');
     return;
   }
 
@@ -43,10 +43,10 @@ async function submit() {
       : await register({ username, password: form.password });
     userStore.setAuth(payload);
     visible.value = false;
-    ElMessage.success(mode.value === 'login' ? '已登录' : '已注册');
+    message.success(mode.value === 'login' ? '已登录' : '已注册');
   }
   catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '操作失败');
+    message.error(error instanceof Error ? error.message : '操作失败');
   }
   finally {
     loading.value = false;
@@ -55,39 +55,49 @@ async function submit() {
 </script>
 
 <template>
-  <el-dialog v-model="visible" width="420px" :show-close="false" align-center class="auth-dialog">
-    <template #header>
+  <a-modal
+    v-model:open="visible"
+    width="420px"
+    :footer="null"
+    :closable="false"
+    centered
+    wrap-class-name="auth-dialog-wrap"
+    aria-describedby="auth-dialog-description"
+  >
+    <template #title>
       <div class="dialog-head">
         <h2>{{ mode === 'login' ? '登录' : '注册' }}</h2>
-        <p>进入心理对话协助</p>
+        <p id="auth-dialog-description">进入心理对话协助</p>
       </div>
     </template>
 
-    <el-form label-position="top" @submit.prevent>
-      <el-form-item label="用户名">
-        <el-input v-model="form.username" placeholder="至少 2 个字符" autocomplete="username" />
-      </el-form-item>
-      <el-form-item label="密码">
-        <el-input
-          v-model="form.password"
-          type="password"
+    <a-form layout="vertical" class="auth-form" @submit.prevent>
+      <a-form-item label="用户名">
+        <a-input
+          v-model:value="form.username"
+          placeholder="至少 2 个字符"
+          autocomplete="username"
+          aria-label="用户名"
+        />
+      </a-form-item>
+      <a-form-item label="密码">
+        <a-input-password
+          v-model:value="form.password"
           placeholder="至少 6 位"
-          autocomplete="current-password"
-          show-password
+          :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
+          aria-label="密码"
           @keyup.enter="submit"
         />
-      </el-form-item>
-    </el-form>
+      </a-form-item>
+    </a-form>
 
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button text @click="mode = mode === 'login' ? 'register' : 'login'">
-          {{ mode === 'login' ? '创建账号' : '已有账号' }}
-        </el-button>
-        <el-button type="primary" :loading="loading" @click="submit">
-          {{ mode === 'login' ? '登录' : '注册' }}
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
+    <div class="dialog-footer">
+      <a-button type="text" @click="mode = mode === 'login' ? 'register' : 'login'">
+        {{ mode === 'login' ? '创建账号' : '已有账号' }}
+      </a-button>
+      <a-button type="primary" :loading="loading" @click="submit">
+        {{ mode === 'login' ? '登录' : '注册' }}
+      </a-button>
+    </div>
+  </a-modal>
 </template>

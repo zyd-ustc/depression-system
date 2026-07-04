@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { message } from 'ant-design-vue';
 import { computed, ref } from 'vue';
 import { acceptConsent } from '@/api/auth';
 import { useUserStore } from '@/stores';
@@ -12,7 +12,7 @@ const visible = computed(() => userStore.isAuthed && userStore.consentRequired);
 
 async function submit() {
   if (!checked.value) {
-    ElMessage.warning('请先完成确认');
+    message.warning('请先完成确认');
     return;
   }
   loading.value = true;
@@ -21,7 +21,7 @@ async function submit() {
     userStore.setToken(payload.token);
   }
   catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '确认失败');
+    message.error(error instanceof Error ? error.message : '确认失败');
   }
   finally {
     loading.value = false;
@@ -30,22 +30,30 @@ async function submit() {
 </script>
 
 <template>
-  <el-dialog :model-value="visible" width="380px" :show-close="false" align-center class="consent-dialog">
-    <template #header>
+  <a-modal
+    :open="visible"
+    width="400px"
+    :footer="null"
+    :closable="false"
+    centered
+    wrap-class-name="consent-dialog-wrap"
+    aria-describedby="consent-dialog-description"
+  >
+    <template #title>
       <div class="dialog-head">
         <h2>使用确认</h2>
-        <p>继续前请完成必要确认。</p>
+        <p id="consent-dialog-description">继续前请完成必要确认。</p>
       </div>
     </template>
 
-    <el-checkbox v-model="checked">
+    <a-checkbox v-model:checked="checked" class="consent-check">
       我已确认并继续使用
-    </el-checkbox>
+    </a-checkbox>
 
-    <template #footer>
-      <el-button type="primary" :loading="loading" @click="submit">
+    <div class="dialog-footer is-end">
+      <a-button type="primary" :loading="loading" @click="submit">
         继续
-      </el-button>
-    </template>
-  </el-dialog>
+      </a-button>
+    </div>
+  </a-modal>
 </template>

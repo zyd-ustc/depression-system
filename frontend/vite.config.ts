@@ -17,4 +17,14 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vue: ['vue', 'vue-router', 'pinia', 'pinia-plugin-persistedstate'],
+          antd: ['ant-design-vue', '@ant-design/icons-vue'],
+        },
+      },
+    },
+  },
 });

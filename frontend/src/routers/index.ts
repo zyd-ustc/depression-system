@@ -1,6 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import ChatPage from '@/pages/chat/index.vue';
-import MonitorPage from '@/pages/monitor/index.vue';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -8,12 +6,12 @@ const router = createRouter({
     {
       path: '/',
       name: 'chat',
-      component: ChatPage,
+      component: () => import('@/pages/chat/index.vue'),
     },
     {
       path: '/monitor',
       name: 'monitor',
-      component: MonitorPage,
+      component: () => import('@/pages/monitor/index.vue'),
     },
   ],
 });

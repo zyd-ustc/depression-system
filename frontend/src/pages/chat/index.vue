@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { Monitor } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import {
+  DashboardOutlined,
+  HistoryOutlined,
+  LoginOutlined,
+  PlusOutlined,
+} from '@ant-design/icons-vue';
+import { message as antMessage } from 'ant-design-vue';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { me } from '@/api/auth';
@@ -68,33 +73,33 @@ async function handleContinueLast() {
   try {
     const monitor = await fetchLatestConversation();
     if (!monitor.conversation_id) {
-      ElMessage.info('暂无可继续的会话');
+      antMessage.info('暂无可继续的会话');
       return;
     }
     chatStore.hydrateFromMonitor(monitor);
-    ElMessage.success('已载入最近会话');
+    antMessage.success('已载入最近会话');
   }
   catch (error) {
     const text = error instanceof Error ? error.message : '载入失败';
-    ElMessage.error(text);
+    antMessage.error(text);
   }
 }
 
 function handleNewSession() {
   chatStore.clear();
-  ElMessage.success('已开始新会话');
+  antMessage.success('已开始新会话');
 }
 
 async function handleSubmit(message: string) {
   if (!canChat.value) {
     showLogin.value = !userStore.isAuthed;
     if (userStore.consentRequired) {
-      ElMessage.warning('请先完成使用确认');
+      antMessage.warning('请先完成使用确认');
     }
     return;
   }
   if (sessionEnded.value) {
-    ElMessage.info('本轮对话已结束');
+    antMessage.info('本轮对话已结束');
     return;
   }
   try {
@@ -104,52 +109,78 @@ async function handleSubmit(message: string) {
     const text = error instanceof Error && error.message.trim()
       ? error.message
       : '发送失败：网络或服务未返回错误信息';
-    ElMessage.error(text);
+    antMessage.error(text);
   }
+}
+
+function messageRoleLabel(role: string) {
+  if (role === 'user') return '你';
+  if (role === 'assistant') return '系统';
+  return '提示';
 }
 </script>
 
 <template>
+  <a href="#conversation-input" class="skip-link">跳到输入框</a>
   <main class="product-shell">
-    <section class="topbar">
+    <header class="topbar">
       <div class="brand-block">
-        <span class="system-index">P0 / COUNSEL</span>
+        <span class="system-index">P0 / CARE CONSOLE</span>
         <h1>心理对话协助</h1>
+        <p>面向低强度心理支持场景的安全对话工作台</p>
       </div>
-      <div class="top-actions">
+      <nav class="top-actions" aria-label="主操作">
         <span class="user-chip">{{ userLabel }}</span>
         <div class="button-stack">
-          <el-button v-if="userStore.isAdmin" @click="router.push('/monitor')">
-            <el-icon>
-              <Monitor />
-            </el-icon>
+          <a-button v-if="userStore.isAdmin" @click="router.push('/monitor')">
+            <template #icon>
+              <DashboardOutlined />
+            </template>
             后台
-          </el-button>
+          </a-button>
           <template v-else-if="userStore.isAuthed">
-            <el-button @click="handleContinueLast">
+            <a-button @click="handleContinueLast">
+              <template #icon>
+                <HistoryOutlined />
+              </template>
               继续
-            </el-button>
-            <el-button @click="handleNewSession">
+            </a-button>
+            <a-button @click="handleNewSession">
+              <template #icon>
+                <PlusOutlined />
+              </template>
               新会话
-            </el-button>
+            </a-button>
           </template>
-          <el-button v-else @click="showLogin = true">登录</el-button>
+          <a-button v-else @click="showLogin = true">
+            <template #icon>
+              <LoginOutlined />
+            </template>
+            登录
+          </a-button>
         </div>
-      </div>
-    </section>
+      </nav>
+    </header>
 
-    <section class="workspace">
+    <section class="workspace" aria-label="心理对话工作区">
       <RiskPanel />
 
-      <section class="conversation">
+      <section class="conversation" aria-labelledby="conversation-title" :aria-busy="chatStore.loading">
         <header class="conversation-head">
-          <span>SESSION</span>
+          <h2 id="conversation-title">当前会话</h2>
           <span>{{ turnCount }} TURNS</span>
         </header>
 
-        <div ref="messageListRef" class="messages">
+        <div
+          ref="messageListRef"
+          class="messages"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions text"
+          tabindex="0"
+        >
           <div v-if="chatStore.messages.length === 0" class="empty-state">
-            <span>NO. 001</span>
+            <span>READY</span>
             <h2>从最近的一刻开始</h2>
             <p>一句话就够。先说正在发生的部分。</p>
           </div>
@@ -159,8 +190,9 @@ async function handleSubmit(message: string) {
             :key="`${item.role}-${index}`"
             class="message"
             :class="`is-${item.role}`"
+            :aria-label="`${messageRoleLabel(item.role)}消息`"
           >
-            <span class="message-role">{{ item.role === 'user' ? '你' : item.role === 'assistant' ? '系统' : '提示' }}</span>
+            <span class="message-role">{{ messageRoleLabel(item.role) }}</span>
             <p>{{ item.content }}</p>
           </article>
         </div>

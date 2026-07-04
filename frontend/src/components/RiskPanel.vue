@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { LogoutOutlined } from '@ant-design/icons-vue';
 import { computed } from 'vue';
 import { useChatStore, useUserStore } from '@/stores';
 
@@ -22,13 +23,18 @@ const safetyNotice = computed(() => chatStore.safetyNotice?.visible ? chatStore.
 </script>
 
 <template>
-  <aside class="risk-panel">
+  <aside class="risk-panel" aria-labelledby="risk-panel-title">
     <header>
-      <h2>状态</h2>
-      <el-button v-if="userStore.isAuthed" text @click="userStore.logout()">退出</el-button>
+      <h2 id="risk-panel-title">状态</h2>
+      <a-button v-if="userStore.isAuthed" type="text" danger aria-label="退出当前账号" @click="userStore.logout()">
+        <template #icon>
+          <LogoutOutlined />
+        </template>
+        退出
+      </a-button>
     </header>
 
-    <dl>
+    <dl aria-label="当前会话状态">
       <dt>用户</dt>
       <dd>{{ userStore.username || '-' }}</dd>
       <dt>阶段</dt>
@@ -39,7 +45,13 @@ const safetyNotice = computed(() => chatStore.safetyNotice?.visible ? chatStore.
       <dd>{{ nextTopic }}</dd>
     </dl>
 
-    <section v-if="safetyNotice" class="safety-notice" :class="`is-${safetyNotice.level}`">
+    <section
+      v-if="safetyNotice"
+      class="safety-notice"
+      :class="`is-${safetyNotice.level}`"
+      :role="safetyNotice.level === 'urgent' ? 'alert' : 'status'"
+      aria-live="polite"
+    >
       <b>{{ safetyNotice.title }}</b>
       <p>{{ safetyNotice.message }}</p>
       <ul v-if="safetyNotice.actions.length">
