@@ -30,6 +30,7 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
   if (!response.ok) {
     if (response.status === 401) {
       userStore.logout();
+      throw new Error('您的登录已过期，请重新登录');
     }
     throw new Error(formatApiError(payload, response.statusText || `HTTP ${response.status}`));
   }

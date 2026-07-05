@@ -10,6 +10,8 @@ function show(view) {
   ["authView", "consentView", "chatView"].forEach((id) => $(id).classList.add("hidden"));
   $(view).classList.remove("hidden");
   $("logoutBtn").classList.toggle("hidden", view === "authView");
+  $("newSessionBtn").classList.toggle("hidden", view !== "chatView");
+  if (view === "authView") $("username").focus();
 }
 
 function setStatus(id, text) {
@@ -62,6 +64,7 @@ async function authenticate(mode) {
     state.username = payload.username;
     localStorage.setItem("product_token", state.token);
     $("currentUser").textContent = state.username;
+    $("avatar").textContent = state.username.slice(0, 1) || "访";
     if (payload.consent_required) show("consentView");
     else show("chatView");
   } catch (error) {
@@ -78,6 +81,7 @@ async function loadMe() {
     const payload = await api("/api/me");
     state.username = payload.username;
     $("currentUser").textContent = state.username;
+    $("avatar").textContent = state.username.slice(0, 1) || "访";
     if (payload.consent_required) show("consentView");
     else show("chatView");
   } catch {
@@ -107,8 +111,9 @@ async function acceptConsent() {
 
 function addMessage(role, content) {
   const node = document.createElement("div");
-  node.className = "msg";
-  node.innerHTML = `<span class="role">${role}</span>${escapeHtml(content)}`;
+  node.className = role === "你" ? "msg is-user" : "msg is-system";
+  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  node.innerHTML = `<div><p>${escapeHtml(content)}</p><time>${time}</time></div>`;
   $("messages").appendChild(node);
   $("messages").scrollTop = $("messages").scrollHeight;
 }
@@ -139,11 +144,17 @@ async function sendMessage(event) {
     state.conversationId = payload.conversation_id;
     addMessage("系统", payload.assistant_reply);
     $("riskLevel").textContent = payload.risk.level;
+    $("riskLevel").className = `risk-${payload.risk.level}`;
+    $("riskChip").textContent = payload.risk.level;
+    $("riskChip").className = `risk-${payload.risk.level}`;
     $("riskScore").textContent = String(payload.risk.score);
     $("coveredTopics").textContent = payload.risk.covered_topics.length
       ? payload.risk.covered_topics.join(" / ")
       : "-";
     $("nextTopic").textContent = payload.next_topic_focus.topic;
+    if (payload.safety_notice?.visible) {
+      addMessage("系统", `${payload.safety_notice.title}\n${payload.safety_notice.message}`);
+    }
   } catch (error) {
     addMessage("系统", `请求失败：${error.message}`);
   } finally {
@@ -153,8 +164,32 @@ async function sendMessage(event) {
 
 $("loginBtn").addEventListener("click", () => authenticate("login"));
 $("registerBtn").addEventListener("click", () => authenticate("register"));
+$("password").addEventListener("keyup", (event) => {
+  if (event.key === "Enter") authenticate("login");
+});
+$("togglePasswordBtn").addEventListener("click", () => {
+  const input = $("password");
+  const isHidden = input.type === "password";
+  input.type = isHidden ? "text" : "password";
+  $("togglePasswordBtn").textContent = isHidden ? "隐藏" : "显示";
+});
 $("consentBtn").addEventListener("click", acceptConsent);
+$("cancelConsentBtn").addEventListener("click", () => {
+  localStorage.removeItem("product_token");
+  state.token = "";
+  show("authView");
+});
 $("chatForm").addEventListener("submit", sendMessage);
+$("newSessionBtn").addEventListener("click", () => {
+  state.conversationId = null;
+  $("messages").innerHTML = "";
+  $("riskLevel").textContent = "未评估";
+  $("riskScore").textContent = "-";
+  $("coveredTopics").textContent = "-";
+  $("nextTopic").textContent = "-";
+  $("riskChip").textContent = "未评估";
+  $("riskChip").className = "";
+});
 $("logoutBtn").addEventListener("click", () => {
   localStorage.removeItem("product_token");
   state.token = "";

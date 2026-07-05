@@ -3,25 +3,25 @@ import zhCN from 'ant-design-vue/es/locale/zh_CN';
 
 const theme = {
   token: {
-    colorPrimary: '#1f6f8b',
-    colorInfo: '#1f6f8b',
-    colorSuccess: '#2e8f7d',
-    colorWarning: '#f2a541',
-    colorError: '#c93f45',
-    colorText: '#14232b',
-    colorTextSecondary: '#55707b',
-    colorBorder: '#c9d8dc',
-    colorBgLayout: '#eef7f6',
+    colorPrimary: '#000000',
+    colorInfo: '#2563a8',
+    colorSuccess: '#24785a',
+    colorWarning: '#9a5b00',
+    colorError: '#b42318',
+    colorText: '#000000',
+    colorTextSecondary: '#666666',
+    colorBorder: '#d9d9d9',
+    colorBgLayout: '#ffffff',
     colorBgContainer: '#ffffff',
     borderRadius: 8,
     controlHeight: 42,
-    fontFamily: '"Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif',
+    fontFamily: 'Inter, Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif',
   },
   components: {
     Button: {
       borderRadius: 8,
       controlHeight: 42,
-      fontWeight: 600,
+      fontWeight: 400,
     },
     Input: {
       borderRadius: 8,

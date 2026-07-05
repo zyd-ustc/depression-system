@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import {
   DashboardOutlined,
-  HistoryOutlined,
+  FileTextOutlined,
   LoginOutlined,
-  PlusOutlined,
+  LogoutOutlined,
+  QuestionCircleOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue';
 import { message as antMessage } from 'ant-design-vue';
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
@@ -23,12 +25,14 @@ const showLogin = ref(false);
 const messageListRef = ref<HTMLElement | null>(null);
 
 const canChat = computed(() => userStore.isAuthed && !userStore.consentRequired && !userStore.isAdmin);
-const userLabel = computed(() => {
-  if (!userStore.username) return '未登录';
-  return userStore.isAdmin ? `${userStore.username} / admin` : userStore.username;
-});
 const turnCount = computed(() => chatStore.messages.filter(item => item.role === 'user').length);
 const sessionEnded = computed(() => chatStore.topicState?.session_status === 'ended');
+const riskLabel = computed(() => {
+  if (chatStore.risk?.level === 'high') return '高风险';
+  if (chatStore.risk?.level === 'medium') return '中风险';
+  if (chatStore.risk?.level === 'low') return '低风险';
+  return '未评估';
+});
 
 watch(
   () => chatStore.messages.length,
@@ -42,7 +46,7 @@ watch(
   () => userStore.isAdmin,
   async isAdmin => {
     if (isAdmin) {
-      await router.push('/monitor');
+      await router.push({ name: 'admin-dashboard' });
     }
   },
 );
@@ -56,7 +60,7 @@ onMounted(async () => {
     const payload = await me();
     userStore.setAuth(payload);
     if (payload.role === 'admin') {
-      await router.push('/monitor');
+      await router.push({ name: 'admin-dashboard' });
     }
   }
   catch {
@@ -90,6 +94,12 @@ function handleNewSession() {
   antMessage.success('已开始新会话');
 }
 
+async function handleLogout() {
+  chatStore.clear();
+  userStore.logout();
+  await router.push({ name: 'login' });
+}
+
 async function handleSubmit(message: string) {
   if (!canChat.value) {
     showLogin.value = !userStore.isAuthed;
@@ -118,57 +128,79 @@ function messageRoleLabel(role: string) {
   if (role === 'assistant') return '系统';
   return '提示';
 }
+
+function formatTime(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 </script>
 
 <template>
   <a href="#conversation-input" class="skip-link">跳到输入框</a>
-  <main class="product-shell">
-    <header class="topbar">
-      <div class="brand-block">
-        <span class="system-index">P0 / CARE CONSOLE</span>
-        <h1>心理对话协助</h1>
-        <p>面向低强度心理支持场景的安全对话工作台</p>
+  <main class="app-shell">
+    <header class="app-topbar">
+      <RouterLink class="brand-lockup" :to="{ name: 'chat' }" aria-label="心理对话协助首页">
+        <span class="brand-mark" aria-hidden="true">心</span>
+        <span>心理对话协助</span>
+      </RouterLink>
+
+      <div class="conversation-title">
+        <span class="current-session-label">当前会话</span>
+        <span>{{ turnCount }} 轮对话 · {{ sessionEnded ? '已结束' : '进行中' }}</span>
       </div>
-      <nav class="top-actions" aria-label="主操作">
-        <span class="user-chip">{{ userLabel }}</span>
-        <div class="button-stack">
-          <a-button v-if="userStore.isAdmin" @click="router.push('/monitor')">
-            <template #icon>
-              <DashboardOutlined />
-            </template>
-            后台
-          </a-button>
-          <template v-else-if="userStore.isAuthed">
-            <a-button @click="handleContinueLast">
-              <template #icon>
-                <HistoryOutlined />
-              </template>
-              继续
-            </a-button>
-            <a-button @click="handleNewSession">
-              <template #icon>
-                <PlusOutlined />
-              </template>
-              新会话
-            </a-button>
+
+      <nav class="top-nav" aria-label="主导航">
+        <RouterLink :to="{ name: 'summary' }">
+          <FileTextOutlined />
+          总结
+        </RouterLink>
+        <RouterLink :to="{ name: 'help' }">
+          <QuestionCircleOutlined />
+          帮助
+        </RouterLink>
+        <a-button v-if="userStore.isAdmin" @click="router.push({ name: 'admin-dashboard' })">
+          <template #icon>
+            <DashboardOutlined />
           </template>
-          <a-button v-else @click="showLogin = true">
+          后台
+        </a-button>
+        <template v-else-if="userStore.isAuthed">
+          <a-button @click="router.push({ name: 'settings' })">
             <template #icon>
-              <LoginOutlined />
+              <SettingOutlined />
             </template>
-            登录
+            设置
           </a-button>
-        </div>
+          <a-button danger @click="handleLogout">
+            <template #icon>
+              <LogoutOutlined />
+            </template>
+            退出
+          </a-button>
+        </template>
+        <a-button v-else @click="router.push({ name: 'login' })">
+          <template #icon>
+            <LoginOutlined />
+          </template>
+          登录
+        </a-button>
       </nav>
     </header>
 
-    <section class="workspace" aria-label="心理对话工作区">
-      <RiskPanel />
+    <section class="chat-workspace" aria-label="心理对话工作区">
+      <RiskPanel @new-session="handleNewSession" @continue-session="handleContinueLast" />
 
       <section class="conversation" aria-labelledby="conversation-title" :aria-busy="chatStore.loading">
         <header class="conversation-head">
-          <h2 id="conversation-title">当前会话</h2>
-          <span>{{ turnCount }} TURNS</span>
+          <div>
+            <h1 id="conversation-title">心理对话</h1>
+            <p>系统回复仅用于支持性沟通，不替代专业诊疗。</p>
+          </div>
+          <div class="risk-chip" :class="`is-${chatStore.risk?.level || 'none'}`">
+            {{ riskLabel }}
+          </div>
         </header>
 
         <div
@@ -180,7 +212,7 @@ function messageRoleLabel(role: string) {
           tabindex="0"
         >
           <div v-if="chatStore.messages.length === 0" class="empty-state">
-            <span>READY</span>
+            <span>Ready</span>
             <h2>从最近的一刻开始</h2>
             <p>一句话就够。先说正在发生的部分。</p>
           </div>
@@ -192,9 +224,29 @@ function messageRoleLabel(role: string) {
             :class="`is-${item.role}`"
             :aria-label="`${messageRoleLabel(item.role)}消息`"
           >
-            <span class="message-role">{{ messageRoleLabel(item.role) }}</span>
-            <p>{{ item.content }}</p>
+            <div class="message-bubble">
+              <p>{{ item.content }}</p>
+              <time>{{ formatTime(item.createdAt) }}</time>
+            </div>
           </article>
+
+          <section
+            v-if="chatStore.safetyNotice?.visible"
+            class="flow-risk-card"
+            :class="`is-${chatStore.safetyNotice.level}`"
+            :role="chatStore.safetyNotice.level === 'urgent' ? 'alert' : 'status'"
+          >
+            <span class="flow-risk-title">{{ chatStore.safetyNotice.title }}</span>
+            <p>{{ chatStore.safetyNotice.message }}</p>
+            <a href="tel:110">紧急情况请联系当地紧急救助</a>
+          </section>
+
+          <div v-if="chatStore.loading" class="typing-indicator" role="status" aria-live="polite">
+            <span />
+            <span />
+            <span />
+            系统正在回复
+          </div>
         </div>
 
         <ChatSender :loading="chatStore.loading" :disabled="sessionEnded" @submit="handleSubmit" />

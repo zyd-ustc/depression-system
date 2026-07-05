@@ -193,7 +193,7 @@ function selectMonitor(item: MonitorResponse) {
       <section class="monitor-panel user-list-panel" aria-labelledby="users-panel-title">
         <header>
           <h2 id="users-panel-title">会话列表</h2>
-          <strong>{{ monitorList.length }} 会话</strong>
+          <span>{{ monitorList.length }} 会话</span>
         </header>
         <div class="monitor-user-list">
           <button
@@ -215,7 +215,7 @@ function selectMonitor(item: MonitorResponse) {
       <section class="monitor-panel warmup-panel" aria-labelledby="warmup-panel-title">
         <header>
           <h2 id="warmup-panel-title">预热进度</h2>
-          <strong>{{ monitor ? (monitor.warmup.completed ? '已结束' : '进行中') : '-' }}</strong>
+          <span>{{ monitor ? (monitor.warmup.completed ? '已结束' : '进行中') : '-' }}</span>
         </header>
         <div
           class="warmup-meter"
@@ -240,7 +240,7 @@ function selectMonitor(item: MonitorResponse) {
       <section class="monitor-panel patient-panel" aria-labelledby="patient-panel-title">
         <header>
           <h2 id="patient-panel-title">患者线索</h2>
-          <strong>{{ patientInfo?.patient_id || '-' }}</strong>
+          <span>{{ patientInfo?.patient_id || '-' }}</span>
         </header>
         <table class="patient-table">
           <caption class="sr-only">患者初步背景、主要困扰、功能影响和待补信息</caption>
@@ -272,7 +272,7 @@ function selectMonitor(item: MonitorResponse) {
       <section class="monitor-panel history-panel" aria-labelledby="history-panel-title">
         <header>
           <h2 id="history-panel-title">对话记录</h2>
-          <strong>{{ monitor?.messages.length ?? 0 }} 条</strong>
+          <span>{{ monitor?.messages.length ?? 0 }} 条</span>
         </header>
         <div class="monitor-history" role="log" aria-live="polite" aria-relevant="additions text" tabindex="0">
           <article v-for="(message, index) in monitor?.messages ?? []" :key="`${message.created_at}-${index}`">
@@ -289,7 +289,7 @@ function selectMonitor(item: MonitorResponse) {
       <section class="monitor-panel status-panel" aria-labelledby="status-panel-title">
         <header>
           <h2 id="status-panel-title">状态汇总</h2>
-          <strong>{{ monitor?.current_status.session_status || '-' }}</strong>
+          <span>{{ monitor?.current_status.session_status || '-' }}</span>
         </header>
         <dl class="monitor-kv">
           <dt>风险</dt>
@@ -311,18 +311,18 @@ function selectMonitor(item: MonitorResponse) {
         </dl>
         <div class="symptom-box">
           <h2>症状判断</h2>
-          <p><b>线索</b>{{ asText(symptomJudgment?.observed_symptoms) }}</p>
-          <p><b>假设</b>{{ asText(symptomJudgment?.possible_patterns) }}</p>
-          <p><b>风险</b>{{ asText(symptomJudgment?.risk_flags) }}</p>
-          <p><b>边界</b>{{ symptomJudgment?.boundary_note || '-' }}</p>
+          <p><span>线索</span>{{ asText(symptomJudgment?.observed_symptoms) }}</p>
+          <p><span>假设</span>{{ asText(symptomJudgment?.possible_patterns) }}</p>
+          <p><span>风险</span>{{ asText(symptomJudgment?.risk_flags) }}</p>
+          <p><span>边界</span>{{ symptomJudgment?.boundary_note || '-' }}</p>
         </div>
         <div class="symptom-box technical-box">
           <h2>运行状态</h2>
-          <p><b>模型</b>{{ modelStatus }}</p>
-          <p><b>语气</b>{{ toneSkill }}</p>
-          <p><b>RAG</b>{{ ragStatus }}</p>
-          <p><b>来源</b>{{ ragSources }}</p>
-          <p v-if="safetyNotice"><b>提示</b>{{ safetyNotice.title }} / {{ safetyNotice.level }}</p>
+          <p><span>模型</span>{{ modelStatus }}</p>
+          <p><span>语气</span>{{ toneSkill }}</p>
+          <p><span>RAG</span>{{ ragStatus }}</p>
+          <p><span>来源</span>{{ ragSources }}</p>
+          <p v-if="safetyNotice"><span>提示</span>{{ safetyNotice.title }} / {{ safetyNotice.level }}</p>
         </div>
         <p v-if="lastError" class="monitor-error" role="alert">{{ lastError }}</p>
       </section>

@@ -16,6 +16,7 @@ import { sendChat } from '@/api/chat';
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   content: string;
+  createdAt: string;
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -33,7 +34,7 @@ export const useChatStore = defineStore('chat', () => {
   const conversationId = ref<number | null>(null);
 
   function append(role: ChatMessage['role'], content: string) {
-    messages.value.push({ role, content });
+    messages.value.push({ role, content, createdAt: new Date().toISOString() });
   }
 
   function applyResponse(response: ChatResponse) {
@@ -55,6 +56,7 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = response.messages.map(item => ({
       role: item.role,
       content: item.content,
+      createdAt: item.created_at,
     }));
     risk.value = response.current_status.risk;
     topicState.value = response.topic_state;
